@@ -6,7 +6,66 @@ import { api } from "@/lib/api-client";
 import { AppShell } from "@/components/layout/app-shell";
 import { QuizStepper } from "@/components/quiz/quiz-stepper";
 import { Spinner } from "@/components/ui/spinner";
-import type { QuizQuestion } from "@vesna/shared";
+import type { QuizQuestion, QuizAnswers } from "@vesna/shared";
+
+const GENDER_MAP: Record<string, string> = {
+  "Мужской": "male",
+  "Женский": "female",
+};
+
+const ACTIVITY_MAP: Record<string, string> = {
+  "Сидячий образ жизни": "sedentary",
+  "Лёгкая активность": "light",
+  "Умеренная активность": "moderate",
+  "Активный образ жизни": "active",
+};
+
+const STRESS_MAP: Record<string, string> = {
+  "Низкий": "low",
+  "Умеренный": "moderate",
+  "Высокий": "high",
+  "Очень высокий": "very_high",
+};
+
+const MEALS_MAP: Record<string, number> = {
+  "1-2 раза": 2,
+  "3 раза": 3,
+  "4 и более": 5,
+};
+
+const SNACKING_MAP: Record<string, string> = {
+  "Никогда": "never",
+  "Редко": "rarely",
+  "Часто": "often",
+};
+
+const MEDICAL_CONDITIONS_MAP: Record<string, string> = {
+  "Диабет": "diabetes",
+  "Гипертония": "hypertension",
+  "Щитовидная железа": "thyroid",
+};
+
+function transformQuizAnswers(raw: Record<string, unknown>): QuizAnswers {
+  const medicalRaw = (raw["11"] as string[] | undefined) ?? [];
+  const medicationsRaw = (raw["12"] as string[] | undefined) ?? [];
+
+  return {
+    gender: GENDER_MAP[raw["1"] as string] as QuizAnswers["gender"],
+    age: raw["2"] as number,
+    heightCm: raw["3"] as number,
+    weightKg: raw["4"] as number,
+    activityLevel: ACTIVITY_MAP[raw["5"] as string] as QuizAnswers["activityLevel"],
+    sleepHours: raw["6"] as number,
+    stressLevel: STRESS_MAP[raw["7"] as string] as QuizAnswers["stressLevel"],
+    mealsPerDay: MEALS_MAP[raw["8"] as string] ?? 3,
+    snackingFrequency: SNACKING_MAP[raw["9"] as string] as QuizAnswers["snackingFrequency"],
+    waterGlasses: raw["10"] as number,
+    medicalConditions: medicalRaw
+      .filter((v) => v !== "Нет" && MEDICAL_CONDITIONS_MAP[v] !== undefined)
+      .map((v) => MEDICAL_CONDITIONS_MAP[v]) as QuizAnswers["medicalConditions"],
+    medications: medicationsRaw.filter((v) => v !== "Нет"),
+  };
+}
 
 export default function QuizPage(): React.JSX.Element {
   const router = useRouter();
@@ -36,7 +95,8 @@ export default function QuizPage(): React.JSX.Element {
     setError(null);
 
     try {
-      const res = await api.post<{ quizId: string }>("/api/quiz/submit", answers);
+      const transformed = transformQuizAnswers(answers);
+      const res = await api.post<{ quizId: string }>("/api/quiz/submit", transformed);
 
       if (res.data) {
         // Store result for the result page
