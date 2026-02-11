@@ -12,20 +12,24 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import Link from "next/link";
 import { GAMIFICATION_LEVELS } from "@vesna/shared";
 
-interface ProfileData {
-  name: string;
+interface UserData {
+  name: string | null;
   email: string | null;
   telegramId: string | null;
   subscriptionTier: string;
+}
+
+interface ProfileResponse {
+  user: UserData;
   gamification: {
     xp: number;
     level: number;
     badges: string[];
-  };
+  } | null;
   streak: {
     current: number;
     longest: number;
-  };
+  } | null;
 }
 
 const tierLabels: Record<string, string> = {
@@ -36,15 +40,15 @@ const tierLabels: Record<string, string> = {
 
 export default function ProfilePage(): React.JSX.Element {
   const { user, logout } = useAuth();
-  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api
-      .get<ProfileData>("/api/user/profile")
+      .get<ProfileResponse>("/api/user/profile")
       .then((res) => {
-        if (res.data) {
+        if (res.data?.user) {
           setProfile(res.data);
         } else {
           setError(res.error?.message ?? "Не удалось загрузить профиль");
@@ -85,17 +89,21 @@ export default function ProfilePage(): React.JSX.Element {
     );
   }
 
+  const displayName = profile.user.name ?? "Пользователь";
+  const gamification = profile.gamification ?? { xp: 0, level: 1, badges: [] };
+  const streak = profile.streak ?? { current: 0, longest: 0 };
+
   // Calculate XP progress to next level
   const currentLevelData = GAMIFICATION_LEVELS.find(
-    (l) => l.level === profile.gamification.level,
+    (l) => l.level === gamification.level,
   );
   const nextLevelData = GAMIFICATION_LEVELS.find(
-    (l) => l.level === profile.gamification.level + 1,
+    (l) => l.level === gamification.level + 1,
   );
   const xpForCurrentLevel = currentLevelData?.xpRequired ?? 0;
-  const xpForNextLevel = nextLevelData?.xpRequired ?? profile.gamification.xp;
+  const xpForNextLevel = nextLevelData?.xpRequired ?? gamification.xp;
   const xpRange = xpForNextLevel - xpForCurrentLevel;
-  const xpInRange = profile.gamification.xp - xpForCurrentLevel;
+  const xpInRange = gamification.xp - xpForCurrentLevel;
   const xpProgress = xpRange > 0 ? (xpInRange / xpRange) * 100 : 100;
 
   return (
@@ -105,25 +113,25 @@ export default function ProfilePage(): React.JSX.Element {
         <Card>
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-tg-button text-tg-button-text text-xl font-bold">
-              {profile.name.charAt(0).toUpperCase()}
+              {displayName.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
               <h2 className="truncate text-base font-semibold text-tg-text">
-                {profile.name}
+                {displayName}
               </h2>
-              {profile.email && (
+              {profile.user.email && (
                 <p className="truncate text-sm text-tg-hint">
-                  {profile.email}
+                  {profile.user.email}
                 </p>
               )}
-              {profile.telegramId && (
+              {profile.user.telegramId && (
                 <p className="text-xs text-tg-hint">
-                  Telegram ID: {profile.telegramId}
+                  Telegram ID: {profile.user.telegramId}
                 </p>
               )}
             </div>
             <Badge variant="tier">
-              {tierLabels[profile.subscriptionTier] ?? profile.subscriptionTier}
+              {tierLabels[profile.user.subscriptionTier] ?? profile.user.subscriptionTier}
             </Badge>
           </div>
         </Card>
@@ -139,7 +147,7 @@ export default function ProfilePage(): React.JSX.Element {
             <div>
               <p className="text-xs text-tg-hint">Уровень</p>
               <p className="text-lg font-bold text-tg-text">
-                {profile.gamification.level}
+                {gamification.level}
               </p>
               <p className="text-xs text-tg-hint">
                 {currentLevelData?.name ?? ""}
@@ -148,11 +156,11 @@ export default function ProfilePage(): React.JSX.Element {
             <div className="text-right">
               <p className="text-xs text-tg-hint">Опыт</p>
               <p className="text-lg font-bold text-vesna-green-dark">
-                {profile.gamification.xp} XP
+                {gamification.xp} XP
               </p>
               {nextLevelData && (
                 <p className="text-xs text-tg-hint">
-                  до {nextLevelData.name}: {xpForNextLevel - profile.gamification.xp}
+                  до {nextLevelData.name}: {xpForNextLevel - gamification.xp}
                 </p>
               )}
             </div>
@@ -160,11 +168,11 @@ export default function ProfilePage(): React.JSX.Element {
           <ProgressBar value={xpProgress} />
 
           {/* Badges */}
-          {profile.gamification.badges.length > 0 && (
+          {gamification.badges.length > 0 && (
             <div className="mt-4">
               <p className="mb-2 text-xs font-medium text-tg-hint">Значки</p>
               <div className="flex flex-wrap gap-2">
-                {profile.gamification.badges.map((badge) => (
+                {gamification.badges.map((badge) => (
                   <Badge key={badge} variant="xp">
                     {badge}
                   </Badge>
@@ -181,13 +189,13 @@ export default function ProfilePage(): React.JSX.Element {
             <div>
               <p className="text-xs text-tg-hint">Текущая</p>
               <p className="text-lg font-bold text-tg-text">
-                {profile.streak.current} дней
+                {streak.current} дней
               </p>
             </div>
             <div className="text-right">
               <p className="text-xs text-tg-hint">Рекорд</p>
               <p className="text-lg font-bold text-vesna-orange">
-                {profile.streak.longest} дней
+                {streak.longest} дней
               </p>
             </div>
           </div>

@@ -75,7 +75,28 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
         })
           .then((res) => {
             if (res.ok) return res.json();
-            throw new Error("Invalid token");
+            // Token expired — try refresh
+            const refreshToken = localStorage.getItem(REFRESH_KEY);
+            if (!refreshToken) throw new Error("No refresh token");
+            return fetch("/api/auth/refresh", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ refreshToken }),
+            }).then((refreshRes) => {
+              if (!refreshRes.ok) throw new Error("Refresh failed");
+              return refreshRes.json().then((tokens) => {
+                localStorage.setItem(TOKEN_KEY, tokens.accessToken);
+                localStorage.setItem(REFRESH_KEY, tokens.refreshToken);
+                setToken(tokens.accessToken);
+                // Retry profile fetch with new token
+                return fetch("/api/user/profile", {
+                  headers: { Authorization: `Bearer ${tokens.accessToken}` },
+                }).then((r) => {
+                  if (r.ok) return r.json();
+                  throw new Error("Profile fetch failed after refresh");
+                });
+              });
+            });
           })
           .then((data) => setUser(data.user))
           .catch(() => logout())
