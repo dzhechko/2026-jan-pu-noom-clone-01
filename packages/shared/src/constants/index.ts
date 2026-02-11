@@ -1,4 +1,5 @@
 import type { QuizQuestion, BmiCategory } from "../types/index";
+import type { NotificationType, NotificationPrefs, NotificationMessage } from "../types/index";
 
 export const SUBSCRIPTION_TIERS = {
   free: { maxLessons: 3, hasCoach: false, hasDuels: false },
@@ -78,7 +79,13 @@ export const MAX_COACH_MESSAGE_LENGTH = 2000;
 
 // --- Notifications constants ---
 
-import type { NotificationType, NotificationPrefs, NotificationMessage } from "../types/index";
+function escapeHtml(text: string | number): string {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   lessonReminder: true,
@@ -115,7 +122,7 @@ export const NOTIFICATION_TEMPLATES: Record<
     buttonUrl: "/lessons",
   }),
   streak_risk: (data) => ({
-    text: `🔥 <b>Streak на кону!</b>\nВаша серия ${data.streak} дней. Не потеряйте!`,
+    text: `🔥 <b>Streak на кону!</b>\nВаша серия ${escapeHtml(data.streak)} дней. Не потеряйте!`,
     buttonText: "Продолжить серию",
     buttonUrl: "/lessons",
   }),
@@ -135,7 +142,7 @@ export const NOTIFICATION_TEMPLATES: Record<
     buttonUrl: "/",
   }),
   duel_accepted: (data) => ({
-    text: `⚔️ <b>Дуэль началась!</b>\n${data.opponentName} принял ваш вызов`,
+    text: `⚔️ <b>Дуэль началась!</b>\n${escapeHtml(data.opponentName)} принял ваш вызов`,
     buttonText: "К дуэли",
     buttonUrl: `/duels/${data.duelId}`,
   }),
@@ -145,7 +152,7 @@ export const NOTIFICATION_TEMPLATES: Record<
     buttonUrl: `/duels/${data.duelId}`,
   }),
   weekly_report: (data) => ({
-    text: `📊 <b>Итоги недели</b>\nУроков: ${data.lessons} | Приёмов пищи: ${data.meals} | Серия: ${data.streak}`,
+    text: `📊 <b>Итоги недели</b>\nУроков: ${escapeHtml(data.lessons)} | Приёмов пищи: ${escapeHtml(data.meals)} | Серия: ${escapeHtml(data.streak)}`,
     buttonText: "Подробнее",
     buttonUrl: "/",
   }),

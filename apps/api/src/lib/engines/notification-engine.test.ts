@@ -3,7 +3,6 @@ import {
   getLocalHour,
   isQuietHours,
   isLocalHourWindow,
-  getPreferenceKey,
   shouldSendNotification,
   parseNotificationPrefs,
   getNotificationTemplateText,
@@ -11,7 +10,9 @@ import {
 import {
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_TIMEZONE,
+  NOTIFICATION_PREF_MAP,
 } from "@vesna/shared";
+import type { NotificationType } from "@vesna/shared";
 
 // UT-N01: getNotificationTemplateText returns correct text for each type
 describe("getNotificationTemplateText", () => {
@@ -52,6 +53,18 @@ describe("getNotificationTemplateText", () => {
     expect(msg.buttonUrl).toBe("/coach");
   });
 
+  it("returns churn_5d template", () => {
+    const msg = getNotificationTemplateText("churn_5d", {});
+    expect(msg.text).toContain("прогресс сохранён");
+    expect(msg.buttonUrl).toBe("/");
+  });
+
+  it("returns churn_14d template", () => {
+    const msg = getNotificationTemplateText("churn_14d", {});
+    expect(msg.text).toContain("Не сдавайтесь");
+    expect(msg.buttonUrl).toBe("/");
+  });
+
   it("returns weekly_report template with stats", () => {
     const msg = getNotificationTemplateText("weekly_report", {
       lessons: 5,
@@ -62,12 +75,26 @@ describe("getNotificationTemplateText", () => {
     expect(msg.text).toContain("12");
     expect(msg.text).toContain("3");
   });
+
+  it("escapes HTML in user-provided opponentName", () => {
+    const msg = getNotificationTemplateText("duel_accepted", {
+      opponentName: '<script>alert("xss")</script>',
+      duelId: "abc",
+    });
+    expect(msg.text).not.toContain("<script>");
+    expect(msg.text).toContain("&lt;script&gt;");
+  });
 });
 
 // UT-N03, UT-N04: isQuietHours
 describe("isQuietHours", () => {
-  it("returns true for 22:00-07:59 (quiet hours)", () => {
-    // Create a date that is 23:00 in Moscow (UTC+3)
+  it("returns true for 22:00 (first quiet hour)", () => {
+    // 22:00 MSK = 19:00 UTC
+    const date = new Date("2026-02-11T19:00:00Z");
+    expect(isQuietHours(date, "Europe/Moscow")).toBe(true);
+  });
+
+  it("returns true for 23:00 (quiet hours)", () => {
     // 23:00 MSK = 20:00 UTC
     const date = new Date("2026-02-11T20:00:00Z");
     expect(isQuietHours(date, "Europe/Moscow")).toBe(true);
@@ -79,15 +106,27 @@ describe("isQuietHours", () => {
     expect(isQuietHours(date, "Europe/Moscow")).toBe(true);
   });
 
-  it("returns false for 08:00-21:59 (active hours)", () => {
+  it("returns true for 07:00 local (last quiet hour)", () => {
+    // 07:00 MSK = 04:00 UTC
+    const date = new Date("2026-02-11T04:00:00Z");
+    expect(isQuietHours(date, "Europe/Moscow")).toBe(true);
+  });
+
+  it("returns false for 08:00 (first active hour)", () => {
+    // 08:00 MSK = 05:00 UTC
+    const date = new Date("2026-02-11T05:00:00Z");
+    expect(isQuietHours(date, "Europe/Moscow")).toBe(false);
+  });
+
+  it("returns false for 10:00 (active hours)", () => {
     // 10:00 MSK = 07:00 UTC
     const date = new Date("2026-02-11T07:00:00Z");
     expect(isQuietHours(date, "Europe/Moscow")).toBe(false);
   });
 
-  it("returns false for 15:00 (active hours)", () => {
-    // 15:00 MSK = 12:00 UTC
-    const date = new Date("2026-02-11T12:00:00Z");
+  it("returns false for 21:00 (last active hour)", () => {
+    // 21:00 MSK = 18:00 UTC
+    const date = new Date("2026-02-11T18:00:00Z");
     expect(isQuietHours(date, "Europe/Moscow")).toBe(false);
   });
 
@@ -124,18 +163,25 @@ describe("isLocalHourWindow", () => {
     const date = new Date("2026-02-10T22:00:00Z");
     expect(isLocalHourWindow(date, 10, "Pacific/Fiji")).toBe(true);
   });
+
+  it("works with negative-offset timezone", () => {
+    // 10:00 in America/New_York (UTC-5 winter) = 15:00 UTC
+    const date = new Date("2026-02-11T15:00:00Z");
+    expect(isLocalHourWindow(date, 10, "America/New_York")).toBe(true);
+  });
 });
 
-// UT-N08: getPreferenceKey
-describe("getPreferenceKey", () => {
-  it("maps notification type to pref key", () => {
-    expect(getPreferenceKey("lesson_reminder")).toBe("lessonReminder");
-    expect(getPreferenceKey("streak_risk")).toBe("streakRisk");
-    expect(getPreferenceKey("churn_2d")).toBe("churnPrevention");
-    expect(getPreferenceKey("churn_5d")).toBe("churnPrevention");
-    expect(getPreferenceKey("duel_accepted")).toBe("duelEvents");
-    expect(getPreferenceKey("duel_completed")).toBe("duelEvents");
-    expect(getPreferenceKey("weekly_report")).toBe("weeklyReport");
+// UT-N08: preference key mapping
+describe("NOTIFICATION_PREF_MAP", () => {
+  it("maps all notification types to pref keys", () => {
+    expect(NOTIFICATION_PREF_MAP["lesson_reminder"]).toBe("lessonReminder");
+    expect(NOTIFICATION_PREF_MAP["streak_risk"]).toBe("streakRisk");
+    expect(NOTIFICATION_PREF_MAP["churn_2d"]).toBe("churnPrevention");
+    expect(NOTIFICATION_PREF_MAP["churn_5d"]).toBe("churnPrevention");
+    expect(NOTIFICATION_PREF_MAP["churn_14d"]).toBe("churnPrevention");
+    expect(NOTIFICATION_PREF_MAP["duel_accepted"]).toBe("duelEvents");
+    expect(NOTIFICATION_PREF_MAP["duel_completed"]).toBe("duelEvents");
+    expect(NOTIFICATION_PREF_MAP["weekly_report"]).toBe("weeklyReport");
   });
 });
 
@@ -178,6 +224,21 @@ describe("shouldSendNotification", () => {
     expect(
       shouldSendNotification(prefs, "duel_accepted", activeTime, "Europe/Moscow"),
     ).toBe(false);
+  });
+
+  it.each([
+    "lesson_reminder",
+    "streak_risk",
+    "churn_2d",
+    "churn_5d",
+    "churn_14d",
+    "duel_accepted",
+    "duel_completed",
+    "weekly_report",
+  ] as NotificationType[])("returns true for %s with all prefs enabled during active hours", (type) => {
+    expect(
+      shouldSendNotification(DEFAULT_NOTIFICATION_PREFS, type, activeTime, "Europe/Moscow"),
+    ).toBe(true);
   });
 });
 
@@ -228,5 +289,11 @@ describe("getLocalHour", () => {
     const date = new Date("2026-02-11T07:00:00Z");
     const hour = getLocalHour(date, "Invalid/Timezone");
     expect(hour).toBe(10); // Falls back to Moscow
+  });
+
+  it("handles negative-offset timezone correctly", () => {
+    // 03:00 UTC = 22:00 EST (Feb 10) in New York
+    const date = new Date("2026-02-11T03:00:00Z");
+    expect(getLocalHour(date, "America/New_York")).toBe(22);
   });
 });

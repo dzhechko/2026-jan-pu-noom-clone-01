@@ -13,6 +13,10 @@ import {
   NOTIFICATION_RATE_DELAY_MS,
 } from "@vesna/shared";
 
+// --- Constants ---
+
+const CRON_BATCH_SIZE = 1000;
+
 // --- Helper functions (exported for testing) ---
 
 export function getLocalHour(date: Date, timezone: string): number {
@@ -24,8 +28,13 @@ export function getLocalHour(date: Date, timezone: string): number {
     }).format(date);
     return parseInt(formatted, 10);
   } catch {
-    // Invalid timezone — fallback to Moscow
-    return getLocalHour(date, DEFAULT_TIMEZONE);
+    // Invalid timezone — fallback to hardcoded Moscow (not DEFAULT_TIMEZONE to prevent infinite recursion)
+    const formatted = new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      hour12: false,
+      timeZone: "Europe/Moscow",
+    }).format(date);
+    return parseInt(formatted, 10);
   }
 }
 
@@ -43,33 +52,20 @@ export function isLocalHourWindow(
   return hour === targetHour;
 }
 
-export function getPreferenceKey(
-  type: NotificationType,
-): keyof NotificationPrefs {
-  return NOTIFICATION_PREF_MAP[type];
-}
-
 export function parseNotificationPrefs(
   settings: Record<string, unknown> | null,
 ): { preferences: NotificationPrefs; timezone: string } {
-  try {
-    const s = settings ?? {};
-    const prefs = (s as Record<string, unknown>).notificationPrefs;
-    const tz = (s as Record<string, unknown>).timezone;
+  const s = settings ?? {};
+  const prefs = (s as Record<string, unknown>).notificationPrefs;
+  const tz = (s as Record<string, unknown>).timezone;
 
-    return {
-      preferences: {
-        ...DEFAULT_NOTIFICATION_PREFS,
-        ...((typeof prefs === "object" && prefs !== null ? prefs : {}) as Partial<NotificationPrefs>),
-      },
-      timezone: typeof tz === "string" ? tz : DEFAULT_TIMEZONE,
-    };
-  } catch {
-    return {
-      preferences: { ...DEFAULT_NOTIFICATION_PREFS },
-      timezone: DEFAULT_TIMEZONE,
-    };
-  }
+  return {
+    preferences: {
+      ...DEFAULT_NOTIFICATION_PREFS,
+      ...((typeof prefs === "object" && prefs !== null ? prefs : {}) as Partial<NotificationPrefs>),
+    },
+    timezone: typeof tz === "string" ? tz : DEFAULT_TIMEZONE,
+  };
 }
 
 export function shouldSendNotification(
@@ -78,13 +74,9 @@ export function shouldSendNotification(
   date: Date,
   timezone: string,
 ): boolean {
-  // Check preference
-  const prefKey = getPreferenceKey(type);
+  const prefKey = NOTIFICATION_PREF_MAP[type];
   if (!prefs[prefKey]) return false;
-
-  // Check quiet hours
   if (isQuietHours(date, timezone)) return false;
-
   return true;
 }
 
@@ -92,18 +84,78 @@ export function getNotificationTemplateText(
   type: NotificationType,
   data: Record<string, string | number>,
 ): { text: string; buttonText: string; buttonUrl: string } {
-  const template = NOTIFICATION_TEMPLATES[type];
-  return template(data);
+  return NOTIFICATION_TEMPLATES[type](data);
 }
 
-// --- DB-dependent functions ---
+// --- Core send (internal, accepts pre-fetched user data to avoid N+1) ---
+
+async function sendNotificationDirect(
+  userId: string,
+  telegramId: string,
+  preferences: NotificationPrefs,
+  timezone: string,
+  type: NotificationType,
+  data: Record<string, string | number>,
+): Promise<void> {
+  // 1. Check preferences + quiet hours via shouldSendNotification
+  if (!shouldSendNotification(preferences, type, new Date(), timezone)) return;
+
+  // 2. Check daily cap (fail-closed: skip if Redis unavailable)
+  const today = getLocalDateString(new Date(), timezone);
+  const countKey = `notif:count:${userId}:${today}`;
+  try {
+    const count = await redis.get(countKey);
+    if (count && parseInt(count, 10) >= NOTIFICATION_DAILY_CAP) return;
+  } catch {
+    console.warn("[notification] Redis unavailable for daily cap, skipping send (fail-closed)");
+    return;
+  }
+
+  // 3. Atomic dedup (SETNX — prevents race conditions)
+  const dedupKey = `notif:sent:${type}:${userId}:${today}`;
+  try {
+    const wasSet = await redis.set(dedupKey, "1", "EX", 86400, "NX");
+    if (!wasSet) return; // Already sent this type today
+  } catch {
+    console.warn("[notification] Redis unavailable for dedup, skipping send (fail-closed)");
+    return;
+  }
+
+  // 4. Build and send message
+  const message = getNotificationTemplateText(type, data);
+  const result = await sendTelegramMessage(telegramId, message);
+
+  // 5. Log (no PII — only type and error)
+  await prisma.notificationLog.create({
+    data: {
+      userId,
+      type,
+      channel: "telegram",
+      status: result.success ? "sent" : "failed",
+      metadata: { error: result.error ?? null },
+    },
+  });
+
+  // 6. Update daily counter on success
+  if (result.success) {
+    try {
+      const pipeline = redis.pipeline();
+      pipeline.incr(countKey);
+      pipeline.expire(countKey, 86400);
+      await pipeline.exec();
+    } catch {
+      // Counter update non-critical — dedup key already set
+    }
+  }
+}
+
+// --- Public API: send notification by userId (for event-driven hooks) ---
 
 export async function sendNotification(
   userId: string,
   type: NotificationType,
   data: Record<string, string | number> = {},
 ): Promise<void> {
-  // 1. Get user
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { telegramId: true, settings: true },
@@ -111,61 +163,11 @@ export async function sendNotification(
 
   if (!user || !user.telegramId) return;
 
-  // 2. Check preferences
   const { preferences, timezone } = parseNotificationPrefs(
     user.settings as Record<string, unknown>,
   );
-  const prefKey = getPreferenceKey(type);
-  if (!preferences[prefKey]) return;
 
-  // 3. Check daily cap
-  const today = new Date().toISOString().slice(0, 10);
-  const countKey = `notif:count:${userId}:${today}`;
-  try {
-    const count = await redis.get(countKey);
-    if (count && parseInt(count, 10) >= NOTIFICATION_DAILY_CAP) return;
-  } catch {
-    // Redis unavailable — skip cap check
-  }
-
-  // 4. Check dedup (same type today)
-  const dedupKey = `notif:sent:${type}:${userId}:${today}`;
-  try {
-    const exists = await redis.get(dedupKey);
-    if (exists) return;
-  } catch {
-    // Redis unavailable — skip dedup
-  }
-
-  // 5. Check quiet hours
-  const now = new Date();
-  if (isQuietHours(now, timezone)) return;
-
-  // 6. Build and send message
-  const message = getNotificationTemplateText(type, data);
-  const result = await sendTelegramMessage(user.telegramId, message);
-
-  // 7. Log
-  await prisma.notificationLog.create({
-    data: {
-      userId,
-      type,
-      channel: "telegram",
-      status: result.success ? "sent" : "failed",
-      metadata: { messageText: message.text, error: result.error },
-    },
-  });
-
-  // 8. Update counters on success
-  if (result.success) {
-    try {
-      await redis.incr(countKey);
-      await redis.expire(countKey, 86400);
-      await redis.setex(dedupKey, 86400, "1");
-    } catch {
-      // Redis unavailable
-    }
-  }
+  await sendNotificationDirect(userId, user.telegramId, preferences, timezone, type, data);
 }
 
 // --- Preferences API ---
@@ -194,7 +196,6 @@ export async function updateNotificationPrefs(
 
   const settings = ((user?.settings as Record<string, unknown>) ?? {}) as Record<string, unknown>;
 
-  // Merge preferences
   const currentPrefs = {
     ...DEFAULT_NOTIFICATION_PREFS,
     ...((settings.notificationPrefs as Partial<NotificationPrefs>) ?? {}),
@@ -205,7 +206,7 @@ export async function updateNotificationPrefs(
   const newPrefs = { ...currentPrefs, ...prefUpdates };
   settings.notificationPrefs = newPrefs;
 
-  if (newTimezone) {
+  if (newTimezone !== undefined) {
     settings.timezone = newTimezone;
   }
 
@@ -228,12 +229,59 @@ interface CronStats {
   failed: number;
 }
 
+interface CronUser {
+  id: string;
+  telegramId: string | null;
+  settings: unknown;
+}
+
+async function processBatch(
+  users: CronUser[],
+  targetHour: number,
+  type: NotificationType,
+  now: Date,
+  stats: CronStats,
+  getData: (user: CronUser) => Record<string, string | number>,
+): Promise<void> {
+  for (const user of users) {
+    if (!user.telegramId) {
+      stats.skipped++;
+      continue;
+    }
+
+    const { preferences, timezone } = parseNotificationPrefs(
+      user.settings as Record<string, unknown>,
+    );
+
+    if (!isLocalHourWindow(now, targetHour, timezone)) {
+      stats.skipped++;
+      continue;
+    }
+
+    try {
+      await sendNotificationDirect(
+        user.id,
+        user.telegramId,
+        preferences,
+        timezone,
+        type,
+        getData(user),
+      );
+      stats.sent[type] = (stats.sent[type] ?? 0) + 1;
+    } catch {
+      stats.failed++;
+    }
+
+    await sleep(NOTIFICATION_RATE_DELAY_MS);
+  }
+}
+
 export async function processScheduledNotifications(): Promise<CronStats> {
   const stats: CronStats = { sent: {}, skipped: 0, failed: 0 };
   const now = new Date();
 
   // --- Lesson Reminders (10:00 local) ---
-  const allUsersForLesson = await prisma.user.findMany({
+  const usersForLesson = await prisma.user.findMany({
     where: { telegramId: { not: null } },
     select: {
       id: true,
@@ -241,36 +289,21 @@ export async function processScheduledNotifications(): Promise<CronStats> {
       settings: true,
       lessonProgress: {
         where: {
-          completedAt: { gte: startOfLocalDay(now, DEFAULT_TIMEZONE) },
+          completedAt: { gte: startOfLocalDay(now) },
         },
         select: { id: true },
         take: 1,
       },
     },
+    take: CRON_BATCH_SIZE,
   });
 
-  for (const user of allUsersForLesson) {
-    // Skip if already completed a lesson today
-    if (user.lessonProgress.length > 0) {
-      stats.skipped++;
-      continue;
-    }
+  // Filter out users who already completed a lesson today
+  const lessonEligible = usersForLesson.filter(
+    (u) => u.lessonProgress.length === 0,
+  );
 
-    const tz = getUserTimezone(user.settings as Record<string, unknown>);
-    if (!isLocalHourWindow(now, 10, tz)) {
-      stats.skipped++;
-      continue;
-    }
-
-    try {
-      await sendNotification(user.id, "lesson_reminder", {});
-      stats.sent.lesson_reminder = (stats.sent.lesson_reminder ?? 0) + 1;
-    } catch {
-      stats.failed++;
-    }
-
-    await sleep(NOTIFICATION_RATE_DELAY_MS);
-  }
+  await processBatch(lessonEligible, 10, "lesson_reminder", now, stats, () => ({}));
 
   // --- Streak At Risk (20:00 local, streak > 2) ---
   const usersForStreak = await prisma.user.findMany({
@@ -278,34 +311,21 @@ export async function processScheduledNotifications(): Promise<CronStats> {
       telegramId: { not: null },
       streak: {
         currentStreak: { gt: 2 },
-        lastActiveDate: { lt: startOfLocalDay(now, DEFAULT_TIMEZONE) },
+        lastActiveDate: { lt: startOfLocalDay(now) },
       },
     },
     select: {
       id: true,
+      telegramId: true,
       settings: true,
       streak: { select: { currentStreak: true } },
     },
+    take: CRON_BATCH_SIZE,
   });
 
-  for (const user of usersForStreak) {
-    const tz = getUserTimezone(user.settings as Record<string, unknown>);
-    if (!isLocalHourWindow(now, 20, tz)) {
-      stats.skipped++;
-      continue;
-    }
-
-    try {
-      await sendNotification(user.id, "streak_risk", {
-        streak: user.streak!.currentStreak,
-      });
-      stats.sent.streak_risk = (stats.sent.streak_risk ?? 0) + 1;
-    } catch {
-      stats.failed++;
-    }
-
-    await sleep(NOTIFICATION_RATE_DELAY_MS);
-  }
+  await processBatch(usersForStreak, 20, "streak_risk", now, stats, (user) => ({
+    streak: (user as typeof usersForStreak[number]).streak?.currentStreak ?? 0,
+  }));
 
   // --- Churn Prevention 2-day (10:00 local) ---
   const twoDaysAgo = new Date(now);
@@ -325,50 +345,32 @@ export async function processScheduledNotifications(): Promise<CronStats> {
         { streak: null, createdAt: { lte: twoDaysAgo, gt: threeDaysAgo } },
       ],
     },
-    select: { id: true, settings: true },
+    select: { id: true, telegramId: true, settings: true },
+    take: CRON_BATCH_SIZE,
   });
 
-  for (const user of usersForChurn) {
-    const tz = getUserTimezone(user.settings as Record<string, unknown>);
-    if (!isLocalHourWindow(now, 10, tz)) {
-      stats.skipped++;
-      continue;
-    }
-
-    try {
-      await sendNotification(user.id, "churn_2d", {});
-      stats.sent.churn_2d = (stats.sent.churn_2d ?? 0) + 1;
-    } catch {
-      stats.failed++;
-    }
-
-    await sleep(NOTIFICATION_RATE_DELAY_MS);
-  }
+  await processBatch(usersForChurn, 10, "churn_2d", now, stats, () => ({}));
 
   return stats;
 }
 
 // --- Internal helpers ---
 
-function getUserTimezone(settings: Record<string, unknown> | null): string {
-  try {
-    return (typeof settings?.timezone === "string"
-      ? settings.timezone
-      : DEFAULT_TIMEZONE) as string;
-  } catch {
-    return DEFAULT_TIMEZONE;
-  }
-}
-
-function startOfLocalDay(date: Date, timezone: string): Date {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
+function getLocalDateString(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  });
-  const localDate = formatter.format(date); // YYYY-MM-DD
-  return new Date(localDate + "T00:00:00Z");
+  }).format(date);
+}
+
+function startOfLocalDay(now: Date): Date {
+  // Use UTC-based approximation: start of today in UTC
+  // This is used for "completed today" checks — a few hours of offset is acceptable
+  // for the purpose of not re-reminding users who just completed a lesson
+  const utcDate = now.toISOString().slice(0, 10);
+  return new Date(utcDate + "T00:00:00Z");
 }
 
 function sleep(ms: number): Promise<void> {

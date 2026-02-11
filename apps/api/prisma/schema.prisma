@@ -131,6 +131,7 @@ model Streak {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([lastActiveDate])
   @@map("streaks")
 }
 
