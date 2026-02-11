@@ -1,7 +1,7 @@
 # Весна — CBT Weight Management Platform
 
 ## Project Overview
-Первая в России платформа управления весом: CBT micro-lessons + AI-коуч (Claude API) + Medical Aha screening. Distributed Monolith, Flutter + Next.js + PostgreSQL, Docker на VPS.
+Первая в России платформа управления весом: CBT micro-lessons + AI-коуч (Claude API) + Medical Aha screening. Distributed Monolith, Telegram Mini App (React) + Next.js + PostgreSQL, Docker на VPS.
 
 ## Documentation
 Read before implementing:
@@ -17,8 +17,8 @@ Read before implementing:
 ## Tech Stack
 | Layer | Tech |
 |-------|------|
-| Mobile | Flutter 3.24+ (Dart, Riverpod) |
-| Backend | Next.js 14+ (API Routes) |
+| Frontend | Telegram Mini App (React, Tailwind CSS, @tma.js/sdk-react) |
+| Backend | Next.js 14+ (API Routes + App Router pages) |
 | ORM | Prisma 5+ |
 | DB | PostgreSQL 16 |
 | Cache | Redis 7 |
@@ -34,12 +34,26 @@ Read before implementing:
 ```
 vesna/
 ├── apps/
-│   ├── mobile/              # Flutter (iOS + Android)
-│   │   └── lib/{screens, widgets, providers, services, models}
-│   └── api/                 # Next.js backend
-│       └── src/app/api/{auth, quiz, lessons, meals, coach, gamification, duels, health}
+│   └── api/                 # Next.js (API routes + Web frontend)
+│       └── src/
+│           ├── app/         # App Router: pages + API routes
+│           │   ├── api/     # REST endpoints
+│           │   ├── quiz/    # Quiz flow pages
+│           │   ├── lessons/ # Lesson pages
+│           │   ├── coach/   # AI Coach chat page
+│           │   ├── profile/ # User profile
+│           │   ├── meals/   # Meal tracking
+│           │   └── ...      # Other pages
+│           ├── components/  # React components
+│           │   ├── ui/      # Primitives (Button, Card, Input...)
+│           │   ├── layout/  # AppShell, BottomNav, PageHeader
+│           │   ├── quiz/    # Quiz-specific components
+│           │   ├── lessons/ # Lesson components
+│           │   ├── coach/   # Chat components
+│           │   └── providers/ # TelegramProvider, AuthProvider
+│           ├── hooks/       # useAuth, useTelegram
+│           └── lib/         # Auth, Prisma, Redis, API client, engines
 ├── packages/shared/         # Shared types, constants
-├── content/lessons/         # CBT lesson content (JSON)
 ├── prisma/                  # Schema + migrations
 ├── nginx/                   # Nginx config
 ├── scripts/                 # Deploy, backup, setup
@@ -50,11 +64,11 @@ vesna/
 ## Key Entities (8)
 User, MedicalProfile, LessonProgress, MealLog, CoachMessage, Streak, Gamification, Duel
 
-## API Groups (15 endpoints)
-Auth (4) · Quiz (3) · Lessons (3) · Meals (3) · Coach (1) · Gamification (1) · Duels (3) · Health (1)
+## API Groups (20 endpoints)
+Auth (5) · Quiz (3) · Lessons (3) · Meals (1+2) · Coach (2) · Gamification (1) · Duels (3) · User (1) · Dashboard (1) · Health (1)
 
 ## Parallel Execution Strategy
-- Use `Task` tool for independent subtasks (e.g., build API + Flutter screens simultaneously)
+- Use `Task` tool for independent subtasks (e.g., build API endpoints + React pages simultaneously)
 - Run tests, linting, type-checking in parallel
 - For complex features: spawn specialized agents (@planner, @architect, @code-reviewer)
 - Independent modules (Quiz, Lessons, Coach, Meals) can be developed in parallel

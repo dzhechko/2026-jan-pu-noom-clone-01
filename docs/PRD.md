@@ -30,7 +30,7 @@
 - B2B корпоративный wellness — Phase 3 (M12+)
 - Полная CBT-программа 200+ уроков — post-MVP
 - Wearable интеграции (Apple Watch, Mi Band) — Phase 2
-- Веб-версия (PWA) — Phase 2
+- Native mobile apps (Flutter iOS/Android) — Phase 2 if needed
 
 ### 1.3 Definitions & Acronyms
 
@@ -498,4 +498,4 @@ Step 3: Friend Medical Aha + Registration
 | Q-002 | CBT content: license from psychologist or create original? | CEO | Original with psychologist review |
 | Q-003 | Medical disclaimer wording for C-screen | Legal | Review by W2 |
 | Q-004 | RuStore vs Google Play: publish to both or one first? | Growth | Both simultaneously |
-| Q-005 | Flutter vs React Native for mobile? | CTO | Flutter (single codebase, better perf) |
+| Q-005 | Platform strategy? | CTO | Telegram Mini App (instant distribution, no app store review) |

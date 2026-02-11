@@ -10,11 +10,11 @@ System design для MVP «Весна» — distributed monolith в monorepo, Do
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                       CLIENTS                                │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────────────────┐  │
-│  │ Android  │  │   iOS    │  │   Web (PWA, Phase 2)     │  │
-│  │ Flutter  │  │ Flutter  │  │   Next.js SSR            │  │
-│  └────┬─────┘  └────┬─────┘  └───────────┬──────────────┘  │
-│       └──────────────┼───────────────────┘                  │
+│  ┌──────────────────────────┐  ┌──────────────────────────┐  │
+│  │  Telegram Mini App      │  │   Web (standalone)       │  │
+│  │  React + @tma.js/sdk    │  │   Same Next.js pages     │  │
+│  └───────────┬─────────────┘  └───────────┬──────────────┘  │
+│              └───────────────────────────┘                   │
 │                      │ HTTPS/REST                           │
 ├──────────────────────┼──────────────────────────────────────┤
 │                REVERSE PROXY (Nginx)                        │
@@ -49,7 +49,7 @@ System design для MVP «Весна» — distributed monolith в monorepo, Do
 
 | Layer | Technology | Version | Rationale |
 |-------|-----------|:-------:|-----------|
-| **Mobile** | Flutter | 3.24+ | Single codebase iOS+Android, hot reload, Dart |
+| **Frontend** | Telegram Mini App (React) | — | Embedded in Telegram, instant distribution, no app store |
 | **Backend** | Next.js | 14+ | API routes + future SSR, fullstack JS |
 | **ORM** | Prisma | 5+ | Type-safe queries, migrations, PostgreSQL support |
 | **Database** | PostgreSQL | 16 | ACID, JSON support, medical data compliance |
@@ -71,40 +71,52 @@ System design для MVP «Весна» — distributed monolith в monorepo, Do
 ```
 vesna/
 ├── apps/
-│   ├── mobile/                    # Flutter app
-│   │   ├── lib/
-│   │   │   ├── screens/           # UI screens
-│   │   │   ├── widgets/           # Reusable widgets
-│   │   │   ├── providers/         # State management (Riverpod)
-│   │   │   ├── services/          # API clients
-│   │   │   ├── models/            # Data models
-│   │   │   └── utils/             # Helpers
-│   │   ├── android/
-│   │   ├── ios/
-│   │   └── pubspec.yaml
-│   │
-│   └── api/                       # Next.js backend
+│   └── api/                       # Next.js (API + Web frontend)
 │       ├── src/
-│       │   ├── app/
-│       │   │   └── api/           # API routes
-│       │   │       ├── auth/
-│       │   │       ├── quiz/
-│       │   │       ├── lessons/
-│       │   │       ├── meals/
-│       │   │       ├── coach/
-│       │   │       ├── gamification/
-│       │   │       ├── duels/
-│       │   │       └── notifications/
+│       │   ├── app/               # App Router
+│       │   │   ├── api/           # REST API routes
+│       │   │   │   ├── auth/      # Login, register, refresh, telegram
+│       │   │   │   ├── quiz/      # Questions, submit, save
+│       │   │   │   ├── lessons/   # List, detail, complete
+│       │   │   │   ├── coach/     # Message, messages history
+│       │   │   │   ├── meals/     # List, create
+│       │   │   │   ├── gamification/
+│       │   │   │   ├── dashboard/
+│       │   │   │   ├── user/      # Profile
+│       │   │   │   └── health/
+│       │   │   ├── quiz/          # Quiz pages
+│       │   │   ├── lessons/       # Lesson pages
+│       │   │   ├── coach/         # Chat page
+│       │   │   ├── meals/         # Meal tracking pages
+│       │   │   ├── profile/       # Profile page
+│       │   │   ├── gamification/  # Achievements page
+│       │   │   ├── duels/         # Duels page
+│       │   │   ├── login/         # Auth page
+│       │   │   ├── layout.tsx     # Root layout (TG SDK + providers)
+│       │   │   ├── page.tsx       # Home dashboard
+│       │   │   └── globals.css    # Tailwind + TG theme vars
+│       │   ├── components/        # React components
+│       │   │   ├── ui/            # Button, Card, Input, etc.
+│       │   │   ├── layout/        # AppShell, BottomNav, PageHeader
+│       │   │   ├── quiz/          # QuizStepper, QuizResultCard
+│       │   │   ├── lessons/       # LessonCard, LessonQuiz
+│       │   │   ├── coach/         # MessageBubble, ChatInput
+│       │   │   └── providers/     # TelegramProvider, AuthProvider
+│       │   ├── hooks/             # useAuth, useTelegram
 │       │   ├── lib/
 │       │   │   ├── prisma.ts      # Prisma client singleton
 │       │   │   ├── auth.ts        # JWT utilities
-│       │   │   ├── claude.ts      # Claude API client
+│       │   │   ├── telegram-auth.ts # TG initData validation
+│       │   │   ├── api-client.ts  # Frontend fetch wrapper
 │       │   │   ├── redis.ts       # Redis client
+│       │   │   ├── engines/       # Business logic
 │       │   │   └── validators/    # Zod schemas
-│       │   └── middleware.ts      # Auth, rate limiting
+│       │   └── middleware.ts      # Security headers, iframe policy
 │       ├── prisma/
 │       │   ├── schema.prisma      # Database schema
 │       │   └── migrations/
+│       ├── tailwind.config.ts
+│       ├── postcss.config.js
 │       ├── next.config.js
 │       └── package.json
 │
@@ -496,11 +508,11 @@ model Duel {
 **Rationale:** MVP with 2-3 devs. Microservices = premature complexity. Module boundaries (auth, quiz, lessons, meals, coach) are clear enough for future extraction.  
 **Consequences:** Simpler deploy, shared DB. Refactor to microservices at 100K+ users if needed.
 
-### ADR-002: Flutter over React Native
-**Status:** Accepted  
-**Decision:** Flutter  
-**Rationale:** Better performance, Skia rendering, single Dart codebase, hot reload. Material Design widgets suit medical UI. Growing RU community.  
-**Consequences:** Team needs Dart skill. Smaller plugin ecosystem than RN for some edge cases.
+### ADR-002: Telegram Mini App over Flutter/React Native
+**Status:** Accepted (revised)
+**Decision:** Telegram Mini App (React web in Next.js)
+**Rationale:** Instant distribution via Telegram (80M+ RU users), no App Store/Google Play review delays, zero install friction, built-in auth via initData, lower development cost (single codebase with API). Hybrid auth supports standalone web access.
+**Consequences:** Limited to web capabilities (no native sensors, limited background processing). Can add native apps in Phase 2 if needed.
 
 ### ADR-003: Next.js API Routes over Dedicated Backend
 **Status:** Accepted  

@@ -9,18 +9,20 @@
 - Async/await over .then() chains
 - Error handling: try/catch with typed error codes from docs/Refinement.md
 
-## Dart (Mobile — Flutter)
-- Strict analysis: `analysis_options.yaml` with pedantic rules
-- Riverpod for state management (providers in `providers/`)
-- Immutable data classes with `freezed` or manual `copyWith`
-- Named routes for navigation
-- Separate API client layer (`services/`)
+## React (Frontend — Telegram Mini App)
+- All interactive pages use `'use client'` directive
+- React Context + hooks for state (TelegramProvider, AuthProvider)
+- Tailwind CSS with Telegram theme CSS variables (`tg-*` tokens)
+- `clsx` for conditional class composition
+- Components in `src/components/{ui,layout,quiz,lessons,coach}/`
+- Custom hooks in `src/hooks/` (useAuth, useTelegram)
+- API calls via `src/lib/api-client.ts` (fetch wrapper with JWT)
 
 ## File Naming
 - TypeScript: `kebab-case.ts` (e.g., `metabolic-age.ts`)
-- Dart: `snake_case.dart` (e.g., `metabolic_age.dart`)
-- Tests: `*.test.ts` / `*_test.dart`
-- Components/Widgets: `PascalCase` class, kebab/snake file
+- React components: `kebab-case.tsx` (e.g., `quiz-stepper.tsx`)
+- Tests: `*.test.ts`
+- Components: `PascalCase` class name, kebab-case file name
 
 ## API Route Pattern
 ```typescript
