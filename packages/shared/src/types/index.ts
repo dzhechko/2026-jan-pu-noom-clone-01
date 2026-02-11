@@ -75,6 +75,11 @@ export interface LessonCompletionResult {
   nextLessonId: number | null;
 }
 
+export interface CoachResponse {
+  response: string;
+  suggestedQuestions: string[];
+}
+
 export type DuelStatus = "pending" | "active" | "completed" | "expired";
 
 export type MedicalCondition = "diabetes" | "hypertension" | "thyroid";
