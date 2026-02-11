@@ -25,6 +25,27 @@ interface MealsResponse {
   meals: MealEntry[];
 }
 
+interface DailySummary {
+  totalCalories: number;
+  totalProteinG: number;
+  totalFatG: number;
+  totalCarbsG: number;
+  targetCalories: number;
+  status: "green" | "yellow" | "red";
+}
+
+interface DailyResponse {
+  date: string;
+  meals: MealEntry[];
+  summary: DailySummary;
+}
+
+const statusColors: Record<DailySummary["status"], string> = {
+  green: "bg-emerald-500",
+  yellow: "bg-amber-500",
+  red: "bg-red-500",
+};
+
 const mealTypeLabels: Record<string, string> = {
   breakfast: "Завтрак",
   lunch: "Обед",
@@ -79,9 +100,10 @@ export default function MealsPage(): React.JSX.Element {
   const [meals, setMeals] = useState<MealEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
 
   useEffect(() => {
-    api
+    const mealsPromise = api
       .get<MealsResponse>("/api/meals")
       .then((res) => {
         if (res.data) {
@@ -92,8 +114,20 @@ export default function MealsPage(): React.JSX.Element {
       })
       .catch(() => {
         setError("Не удалось загрузить питание");
+      });
+
+    const dailyPromise = api
+      .get<DailyResponse>("/api/meals/daily")
+      .then((res) => {
+        if (res.data?.summary) {
+          setDailySummary(res.data.summary);
+        }
       })
-      .finally(() => setLoading(false));
+      .catch(() => {
+        // Silently ignore — summary is optional
+      });
+
+    Promise.all([mealsPromise, dailyPromise]).finally(() => setLoading(false));
   }, []);
 
   if (loading) {
@@ -150,6 +184,58 @@ export default function MealsPage(): React.JSX.Element {
             Добавить приём пищи
           </Button>
         </Link>
+
+        {/* Daily summary */}
+        {dailySummary && (
+          <Card>
+            <div className="flex flex-col gap-3">
+              {/* Calories header */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-tg-text">
+                  Калории за сегодня
+                </span>
+                <span className="text-sm font-semibold text-tg-text">
+                  {dailySummary.totalCalories}{" "}
+                  <span className="font-normal text-tg-hint">
+                    / {dailySummary.targetCalories} ккал
+                  </span>
+                </span>
+              </div>
+
+              {/* Traffic light progress bar */}
+              <div className="h-2 w-full overflow-hidden rounded-full bg-tg-secondary-bg">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ease-out ${statusColors[dailySummary.status]}`}
+                  style={{
+                    width: `${Math.min(100, dailySummary.targetCalories > 0 ? (dailySummary.totalCalories / dailySummary.targetCalories) * 100 : 0)}%`,
+                  }}
+                />
+              </div>
+
+              {/* Macro breakdown */}
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="text-xs text-tg-hint">Белки</span>
+                  <span className="text-sm font-semibold text-tg-text">
+                    {dailySummary.totalProteinG}г
+                  </span>
+                </div>
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="text-xs text-tg-hint">Жиры</span>
+                  <span className="text-sm font-semibold text-tg-text">
+                    {dailySummary.totalFatG}г
+                  </span>
+                </div>
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="text-xs text-tg-hint">Углеводы</span>
+                  <span className="text-sm font-semibold text-tg-text">
+                    {dailySummary.totalCarbsG}г
+                  </span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Empty state */}
         {meals.length === 0 && (
