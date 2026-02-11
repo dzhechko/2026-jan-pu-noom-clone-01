@@ -1,3 +1,5 @@
+import type { QuizQuestion, BmiCategory } from "../types/index";
+
 export const SUBSCRIPTION_TIERS = {
   free: { maxLessons: 3, hasCoach: false, hasDuels: false },
   premium: { maxLessons: 14, hasCoach: true, hasDuels: true },
@@ -47,3 +49,118 @@ export const MEDICAL_KEYWORDS = [
   "давление",
   "инсулин",
 ] as const;
+
+// --- Quiz constants ---
+
+export const QUIZ_QUESTIONS: QuizQuestion[] = [
+  {
+    id: 1,
+    type: "radio",
+    question: "Ваш пол?",
+    options: ["Мужской", "Женский"],
+  },
+  {
+    id: 2,
+    type: "number",
+    question: "Ваш возраст?",
+    min: 14,
+    max: 120,
+    unit: "лет",
+  },
+  {
+    id: 3,
+    type: "number",
+    question: "Ваш рост?",
+    min: 100,
+    max: 250,
+    unit: "см",
+  },
+  {
+    id: 4,
+    type: "number",
+    question: "Ваш вес?",
+    min: 30,
+    max: 300,
+    unit: "кг",
+  },
+  {
+    id: 5,
+    type: "select",
+    question: "Уровень физической активности?",
+    options: ["Сидячий образ жизни", "Лёгкая активность", "Умеренная активность", "Активный образ жизни"],
+  },
+  {
+    id: 6,
+    type: "number",
+    question: "Сколько часов вы спите?",
+    min: 1,
+    max: 16,
+    unit: "часов",
+  },
+  {
+    id: 7,
+    type: "select",
+    question: "Уровень стресса?",
+    options: ["Низкий", "Умеренный", "Высокий", "Очень высокий"],
+  },
+  {
+    id: 8,
+    type: "select",
+    question: "Сколько раз в день вы едите?",
+    options: ["1-2 раза", "3 раза", "4 и более"],
+  },
+  {
+    id: 9,
+    type: "select",
+    question: "Как часто вы перекусываете?",
+    options: ["Никогда", "Редко", "Часто"],
+  },
+  {
+    id: 10,
+    type: "number",
+    question: "Сколько стаканов воды вы пьёте в день?",
+    min: 0,
+    max: 20,
+    unit: "стаканов",
+  },
+  {
+    id: 11,
+    type: "multiselect",
+    question: "Есть ли у вас хронические заболевания?",
+    options: ["Диабет", "Гипертония", "Щитовидная железа", "Нет"],
+  },
+  {
+    id: 12,
+    type: "multiselect",
+    question: "Принимаете ли вы лекарства?",
+    options: ["Инсулин", "Метформин", "Статины", "Другие", "Нет"],
+  },
+];
+
+export const BMI_CATEGORIES: { max: number; category: BmiCategory }[] = [
+  { max: 18.5, category: "underweight" },
+  { max: 25, category: "normal" },
+  { max: 30, category: "overweight" },
+  { max: Infinity, category: "obese" },
+];
+
+export const ACTIVITY_PENALTIES: Record<string, number> = {
+  sedentary: 8,
+  light: 4,
+  moderate: 1,
+  active: 0,
+};
+
+export const STRESS_PENALTIES: Record<string, number> = {
+  very_high: 5,
+  high: 3,
+  moderate: 1,
+  low: 0,
+};
+
+export const GENDER_FACTORS: Record<string, number> = {
+  female: 0.9,
+  male: 1.0,
+};
+
+export const QUIZ_RESULT_TTL_SECONDS = 24 * 60 * 60; // 24 hours
