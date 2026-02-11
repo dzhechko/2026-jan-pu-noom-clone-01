@@ -14,11 +14,11 @@ interface MealEntry {
   mealType: string;
   dishName: string;
   calories: number;
-  protein: number;
-  fat: number;
-  carbs: number;
-  portionGrams: number;
-  createdAt: string;
+  proteinG: number;
+  fatG: number;
+  carbsG: number;
+  portionG: number;
+  loggedAt: string;
 }
 
 interface MealsResponse {
@@ -65,7 +65,7 @@ function groupByDate(meals: MealEntry[]): Record<string, MealEntry[]> {
   const groups: Record<string, MealEntry[]> = {};
 
   for (const meal of meals) {
-    const dateKey = new Date(meal.createdAt).toDateString();
+    const dateKey = new Date(meal.loggedAt).toDateString();
     if (!groups[dateKey]) {
       groups[dateKey] = [];
     }
@@ -188,7 +188,7 @@ export default function MealsPage(): React.JSX.Element {
               {/* Date header */}
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-tg-text">
-                  {formatDate(dateMeals[0].createdAt)}
+                  {formatDate(dateMeals[0].loggedAt)}
                 </h3>
                 <span className="text-xs font-medium text-tg-hint">
                   {totalCalories} ккал
@@ -219,9 +219,9 @@ export default function MealsPage(): React.JSX.Element {
                         </div>
                         <div className="mt-1 flex items-center gap-3 text-xs text-tg-hint">
                           <span>{meal.calories} ккал</span>
-                          <span>Б: {meal.protein}г</span>
-                          <span>Ж: {meal.fat}г</span>
-                          <span>У: {meal.carbs}г</span>
+                          <span>Б: {meal.proteinG}г</span>
+                          <span>Ж: {meal.fatG}г</span>
+                          <span>У: {meal.carbsG}г</span>
                         </div>
                       </div>
                     </div>

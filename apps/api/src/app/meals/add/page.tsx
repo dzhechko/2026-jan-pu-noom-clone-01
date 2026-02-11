@@ -37,10 +37,10 @@ export default function MealsAddPage(): React.JSX.Element {
         mealType,
         dishName,
         calories: Number(calories),
-        protein: Number(protein),
-        fat: Number(fat),
-        carbs: Number(carbs),
-        portionGrams: Number(portion),
+        proteinG: Number(protein),
+        fatG: Number(fat),
+        carbsG: Number(carbs),
+        portionG: Number(portion),
       });
 
       if (res.error) {

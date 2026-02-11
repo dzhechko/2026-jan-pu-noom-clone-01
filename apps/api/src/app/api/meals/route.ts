@@ -93,7 +93,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       return NextResponse.json(
         {
           error: {
-            code: "QUIZ_001",
+            code: "QUIZ_001", // generic validation error code, used across all routes
             message: "Проверьте правильность данных",
             details: { fields: parsed.error.flatten().fieldErrors },
           },
