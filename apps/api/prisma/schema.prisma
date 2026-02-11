@@ -27,12 +27,13 @@ enum ActivityLevel {
 
 model User {
   id                  String           @id @default(uuid())
-  email               String           @unique
-  passwordHash        String           @map("password_hash")
+  email               String?          @unique
+  passwordHash        String?          @map("password_hash")
   name                String
   subscriptionTier    SubscriptionTier @default(free) @map("subscription_tier")
   subscriptionExpires DateTime?        @map("subscription_expires_at")
   vkId                String?          @unique @map("vk_id")
+  telegramId          String?          @unique @map("telegram_id")
   settings            Json             @default("{}")
   createdAt           DateTime         @default(now()) @map("created_at")
   updatedAt           DateTime         @updatedAt @map("updated_at")
