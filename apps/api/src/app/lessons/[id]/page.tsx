@@ -45,13 +45,13 @@ export default function LessonDetailPage(): React.JSX.Element {
     setError(null);
 
     try {
-      const res = await api.post<LessonCompletionResult>(
+      const res = await api.post<{ result: LessonCompletionResult }>(
         `/api/lessons/${lessonId}/complete`,
-        { answers },
+        { quizAnswers: answers },
       );
 
-      if (res.data) {
-        setCompletionResult(res.data);
+      if (res.data?.result) {
+        setCompletionResult(res.data.result);
         setActiveSection("result");
       } else {
         setError(res.error?.message ?? "Ошибка при отправке ответов");
