@@ -9,6 +9,7 @@ export const createMealSchema = z.object({
   fatG: z.number().min(0).max(1000),
   carbsG: z.number().min(0).max(1000),
   portionG: z.number().int().min(1).max(5000),
+  recognitionMethod: z.enum(["manual_entry", "ai_photo"]).default("manual_entry"),
 });
 
 // Daily summary query

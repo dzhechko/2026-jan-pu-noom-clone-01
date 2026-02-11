@@ -94,7 +94,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         fatG: parsed.data.fatG,
         carbsG: parsed.data.carbsG,
         portionG: parsed.data.portionG,
-        recognitionMethod: "manual_entry",
+        recognitionMethod: parsed.data.recognitionMethod,
       },
       select: {
         id: true,
