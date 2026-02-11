@@ -62,13 +62,30 @@ export async function POST(
       return NextResponse.json(errBody, { status });
     }
 
-    // Check if already completed
+    // Check if already completed — return existing result (idempotent)
     const existingProgress = allProgress.find((p) => p.lessonId === lessonId);
     const alreadyCompleted =
       existingProgress?.status === "completed" || existingProgress?.status === "review_needed";
     if (alreadyCompleted) {
-      const { body: errBody, status } = apiError("LESSON_002");
-      return NextResponse.json(errBody, { status });
+      const fullProgress = await prisma.lessonProgress.findUnique({
+        where: { userId_lessonId: { userId, lessonId } },
+        select: { quizScore: true, quizAttempts: true, xpEarned: true, status: true },
+      });
+      const streak = await prisma.streak.findUnique({
+        where: { userId },
+        select: { currentStreak: true, longestStreak: true },
+      });
+      const result: LessonCompletionResult = {
+        score: fullProgress?.quizScore ?? 0,
+        passed: fullProgress?.status === "completed",
+        xpEarned: 0,
+        status: (fullProgress?.status ?? "completed") as LessonCompletionResult["status"],
+        attemptsUsed: fullProgress?.quizAttempts ?? 0,
+        attemptsRemaining: 0,
+        streak: streak ? { current: streak.currentStreak, longest: streak.longestStreak, bonusXp: 0 } : null,
+        nextLessonId: lessonId < 14 ? lessonId + 1 : null,
+      };
+      return NextResponse.json({ result }, { status: 200 });
     }
 
     // Load correct answers
