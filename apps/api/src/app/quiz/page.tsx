@@ -6,7 +6,7 @@ import { api } from "@/lib/api-client";
 import { AppShell } from "@/components/layout/app-shell";
 import { QuizStepper } from "@/components/quiz/quiz-stepper";
 import { Spinner } from "@/components/ui/spinner";
-import type { QuizQuestion, QuizAnswers } from "@vesna/shared";
+import type { QuizQuestion, QuizAnswers, QuizResult } from "@vesna/shared";
 
 const GENDER_MAP: Record<string, string> = {
   "Мужской": "male",
@@ -96,7 +96,7 @@ export default function QuizPage(): React.JSX.Element {
 
     try {
       const transformed = transformQuizAnswers(answers);
-      const res = await api.post<{ quizId: string }>("/api/quiz/submit", transformed);
+      const res = await api.post<QuizResult>("/api/quiz/submit", transformed);
 
       if (res.data) {
         // Store result for the result page
@@ -105,7 +105,8 @@ export default function QuizPage(): React.JSX.Element {
       } else {
         setError(res.error?.message ?? "Ошибка при отправке ответов");
       }
-    } catch {
+    } catch (err) {
+      console.error("[quiz/submit]", err);
       setError("Ошибка при отправке ответов");
     } finally {
       setSubmitting(false);

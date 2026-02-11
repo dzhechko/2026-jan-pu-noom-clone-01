@@ -26,11 +26,17 @@ async function request<T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(url, {
-    method,
-    headers,
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers,
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+  } catch (err) {
+    console.error(`[api-client] ${method} ${url} fetch failed:`, err);
+    return { data: null, error: { code: "GEN_002", message: "Нет соединения с сервером" }, status: 0 };
+  }
 
   if (res.status === 401) {
     // Token expired — clear auth
@@ -42,10 +48,16 @@ async function request<T>(
     return { data: null, error: { code: "AUTH_001", message: "Сессия истекла" }, status: 401 };
   }
 
-  const json = await res.json();
+  let json: Record<string, unknown>;
+  try {
+    json = await res.json();
+  } catch (err) {
+    console.error(`[api-client] ${method} ${url} JSON parse failed (${res.status}):`, err);
+    return { data: null, error: { code: "GEN_001", message: `Ошибка сервера (${res.status})` }, status: res.status };
+  }
 
   if (!res.ok) {
-    return { data: null, error: json.error ?? { code: "GEN_001", message: "Ошибка" }, status: res.status };
+    return { data: null, error: (json.error as { code: string; message: string }) ?? { code: "GEN_001", message: "Ошибка" }, status: res.status };
   }
 
   return { data: json as T, error: null, status: res.status };

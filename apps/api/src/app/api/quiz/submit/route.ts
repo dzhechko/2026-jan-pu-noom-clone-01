@@ -44,12 +44,16 @@ export async function POST(req: Request): Promise<NextResponse> {
     const result = computeQuizResults(quizId, parsed.data);
 
     // 4. Store in Redis (24h TTL) for later linking to user profile
-    await redis.set(
-      `quiz:${quizId}`,
-      JSON.stringify({ answers: parsed.data, result }),
-      "EX",
-      QUIZ_RESULT_TTL_SECONDS
-    );
+    try {
+      await redis.set(
+        `quiz:${quizId}`,
+        JSON.stringify({ answers: parsed.data, result }),
+        "EX",
+        QUIZ_RESULT_TTL_SECONDS
+      );
+    } catch (cacheErr) {
+      console.error("[quiz/submit] Redis cache failed (non-critical):", cacheErr);
+    }
 
     return NextResponse.json(result, { status: 200 });
   } catch (error) {
