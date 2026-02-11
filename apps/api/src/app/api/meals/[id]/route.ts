@@ -20,16 +20,8 @@ export async function PATCH(
     const awaitedParams = await params;
     const paramsParsed = mealIdParamSchema.safeParse(awaitedParams);
     if (!paramsParsed.success) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "QUIZ_001",
-            message: "Проверьте правильность данных",
-            details: { fields: paramsParsed.error.flatten().fieldErrors },
-          },
-        },
-        { status: 400 }
-      );
+      const { body, status } = apiError("QUIZ_001", { fields: paramsParsed.error.flatten().fieldErrors });
+      return NextResponse.json(body, { status });
     }
     const { id: mealId } = paramsParsed.data;
 
@@ -37,16 +29,8 @@ export async function PATCH(
     const rawBody = await req.json();
     const bodyParsed = updateMealSchema.safeParse(rawBody);
     if (!bodyParsed.success) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "QUIZ_001",
-            message: "Проверьте правильность данных",
-            details: { fields: bodyParsed.error.flatten().fieldErrors },
-          },
-        },
-        { status: 400 }
-      );
+      const { body, status } = apiError("QUIZ_001", { fields: bodyParsed.error.flatten().fieldErrors });
+      return NextResponse.json(body, { status });
     }
 
     // Find meal and check ownership
@@ -110,16 +94,8 @@ export async function DELETE(
     const awaitedParams = await params;
     const paramsParsed = mealIdParamSchema.safeParse(awaitedParams);
     if (!paramsParsed.success) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "QUIZ_001",
-            message: "Проверьте правильность данных",
-            details: { fields: paramsParsed.error.flatten().fieldErrors },
-          },
-        },
-        { status: 400 }
-      );
+      const { body, status } = apiError("QUIZ_001", { fields: paramsParsed.error.flatten().fieldErrors });
+      return NextResponse.json(body, { status });
     }
     const { id: mealId } = paramsParsed.data;
 

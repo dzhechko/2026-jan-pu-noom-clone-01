@@ -20,16 +20,8 @@ export async function GET(req: Request): Promise<NextResponse> {
 
     const parsed = mealSearchSchema.safeParse(rawParams);
     if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "QUIZ_001",
-            message: "Проверьте правильность данных",
-            details: { fields: parsed.error.flatten().fieldErrors },
-          },
-        },
-        { status: 400 }
-      );
+      const { body, status } = apiError("QUIZ_001", { fields: parsed.error.flatten().fieldErrors });
+      return NextResponse.json(body, { status });
     }
 
     const results = await searchFood(parsed.data.q, parsed.data.limit);

@@ -80,16 +80,8 @@ export async function POST(req: Request): Promise<NextResponse> {
     const rawBody = await req.json();
     const parsed = createMealSchema.safeParse(rawBody);
     if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "QUIZ_001", // generic validation error code, used across all routes
-            message: "Проверьте правильность данных",
-            details: { fields: parsed.error.flatten().fieldErrors },
-          },
-        },
-        { status: 400 }
-      );
+      const { body, status } = apiError("QUIZ_001", { fields: parsed.error.flatten().fieldErrors });
+      return NextResponse.json(body, { status });
     }
 
     const meal = await prisma.mealLog.create({

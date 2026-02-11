@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, type FormEvent, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api-client";
+import { api, getAuthToken } from "@/lib/api-client";
 import { AppShell } from "@/components/layout/app-shell";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { MealType } from "@vesna/shared";
 
-const TOKEN_KEY = "vesna_access_token";
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_TYPES = ["image/jpeg", "image/png"];
 
@@ -92,9 +91,7 @@ export default function MealsAddPage(): React.JSX.Element {
       const formData = new FormData();
       formData.append("photo", file);
 
-      const token = typeof window !== "undefined"
-        ? localStorage.getItem(TOKEN_KEY)
-        : null;
+      const token = getAuthToken();
 
       const headers: Record<string, string> = {};
       if (token) {

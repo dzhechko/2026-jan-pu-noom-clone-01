@@ -19,16 +19,8 @@ export async function GET(req: Request): Promise<NextResponse> {
     const parsed = dailySummarySchema.safeParse({ date: dateParam ?? undefined });
 
     if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "QUIZ_001",
-            message: "Проверьте правильность данных",
-            details: { fields: parsed.error.flatten().fieldErrors },
-          },
-        },
-        { status: 400 }
-      );
+      const { body, status } = apiError("QUIZ_001", { fields: parsed.error.flatten().fieldErrors });
+      return NextResponse.json(body, { status });
     }
 
     const dateStr = parsed.data.date ?? new Date().toISOString().slice(0, 10);

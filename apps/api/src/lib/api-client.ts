@@ -104,6 +104,10 @@ async function request<T>(
   return { data: json as T, error: null, status: res.status };
 }
 
+export function getAuthToken(): string | null {
+  return typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
+}
+
 export const api = {
   get: <T>(url: string, options?: ApiOptions) => request<T>("GET", url, undefined, options),
   post: <T>(url: string, body?: unknown, options?: ApiOptions) => request<T>("POST", url, body, options),
