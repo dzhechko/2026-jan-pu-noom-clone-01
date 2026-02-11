@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api-client";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import type { QuizResult } from "@vesna/shared";
 
-export default function QuizResultPage(): React.JSX.Element {
+function QuizResultContent(): React.JSX.Element {
   const searchParams = useSearchParams();
   const quizId = searchParams.get("id");
 
@@ -58,42 +58,52 @@ export default function QuizResultPage(): React.JSX.Element {
 
   if (loading) {
     return (
-      <AppShell title="Результат" showNav={false}>
-        <div className="flex items-center justify-center py-20">
-          <Spinner size="lg" />
-        </div>
-      </AppShell>
+      <div className="flex items-center justify-center py-20">
+        <Spinner size="lg" />
+      </div>
     );
   }
 
   if (error || !result) {
     return (
-      <AppShell title="Результат" showNav={false}>
-        <div className="flex flex-col items-center justify-center gap-4 px-6 py-20">
-          <p className="text-sm text-vesna-red">
-            {error ?? "Результат не найден"}
-          </p>
-          <Link href="/quiz">
-            <Button variant="secondary" size="md">
-              Пройти заново
-            </Button>
-          </Link>
-        </div>
-      </AppShell>
+      <div className="flex flex-col items-center justify-center gap-4 px-6 py-20">
+        <p className="text-sm text-vesna-red">
+          {error ?? "Результат не найден"}
+        </p>
+        <Link href="/quiz">
+          <Button variant="secondary" size="md">
+            Пройти заново
+          </Button>
+        </Link>
+      </div>
     );
   }
 
   return (
-    <AppShell title="Ваш результат" showNav={false}>
-      <div className="flex flex-col gap-6 px-4 py-6">
-        <QuizResultCard result={result} />
+    <div className="flex flex-col gap-6 px-4 py-6">
+      <QuizResultCard result={result} />
 
-        <Link href="/lessons" className="w-full">
-          <Button variant="primary" size="lg" className="w-full">
-            Начать обучение
-          </Button>
-        </Link>
-      </div>
+      <Link href="/lessons" className="w-full">
+        <Button variant="primary" size="lg" className="w-full">
+          Начать обучение
+        </Button>
+      </Link>
+    </div>
+  );
+}
+
+export default function QuizResultPage(): React.JSX.Element {
+  return (
+    <AppShell title="Ваш результат" showNav={false}>
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center py-20">
+            <Spinner size="lg" />
+          </div>
+        }
+      >
+        <QuizResultContent />
+      </Suspense>
     </AppShell>
   );
 }
