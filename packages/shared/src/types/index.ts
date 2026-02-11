@@ -82,6 +82,50 @@ export interface CoachResponse {
 
 export type DuelStatus = "pending" | "active" | "completed" | "expired";
 
+export type DuelAction = "lesson_completed" | "meal_logged" | "streak_maintained";
+
+export interface DuelScoreBreakdown {
+  lessonPoints: number;
+  mealPoints: number;
+  streakPoints: number;
+}
+
+export interface DuelParticipant {
+  userId: string;
+  name: string;
+  score: number;
+}
+
+export interface DuelScoreboard {
+  duelId: string;
+  status: DuelStatus;
+  challenger: DuelParticipant;
+  opponent: DuelParticipant;
+  startDate: string;
+  endDate: string;
+  winnerId: string | null;
+  remainingMs: number;
+}
+
+export interface DuelListItem {
+  id: string;
+  status: DuelStatus;
+  challengerName: string;
+  opponentName: string | null;
+  challengerScore: number;
+  opponentScore: number;
+  winnerId: string | null;
+  createdAt: string;
+  endDate: string | null;
+}
+
+export interface DuelCreateResult {
+  duelId: string;
+  inviteToken: string;
+  inviteLink: string;
+  expiresAt: string;
+}
+
 export type MedicalCondition = "diabetes" | "hypertension" | "thyroid";
 
 export type QuizQuestionType = "radio" | "number" | "select" | "multiselect";

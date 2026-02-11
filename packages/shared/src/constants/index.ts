@@ -61,6 +61,19 @@ export const LESSON_TITLES: Record<number, string> = {
 export const DUEL_DURATION_DAYS = 7;
 export const DUEL_INVITE_EXPIRY_HOURS = 72;
 export const MAX_ACTIVE_DUELS = 1;
+
+export const DUEL_SCORE_POINTS: Record<string, number> = {
+  lesson_completed: 10,
+  meal_logged: 5,
+  streak_maintained: 5,
+};
+
+export const DUEL_XP_REWARDS = {
+  winner: 100,
+  participation: 30,
+} as const;
+
+export const DUEL_WINNER_BADGE = "Чемпион Дуэли";
 export const MAX_COACH_MESSAGE_LENGTH = 2000;
 
 export const MEDICAL_KEYWORDS = [

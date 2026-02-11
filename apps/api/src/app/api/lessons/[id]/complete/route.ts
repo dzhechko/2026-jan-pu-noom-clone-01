@@ -6,6 +6,7 @@ import { checkLessonAccess, gradeQuiz } from "@/lib/engines/lesson-engine";
 import { loadLessonContent } from "@/lib/engines/lesson-content";
 import { calculateLevel } from "@/lib/engines/gamification-engine";
 import { computeStreakUpdate } from "@/lib/engines/streak-engine";
+import { updateDuelScore } from "@/lib/engines/duel-engine";
 import { lessonIdParamSchema, lessonCompleteSchema } from "@/lib/validators/lessons";
 import type { LessonCompletionResult } from "@vesna/shared";
 
@@ -158,6 +159,19 @@ export async function POST(
           }
         }
       });
+
+      // Fire-and-forget duel score updates
+      if (grade.passed) {
+        updateDuelScore(userId, "lesson_completed").catch((err) =>
+          console.error("[duels] lesson score", err),
+        );
+      }
+      const streak = streakResult as LessonCompletionResult["streak"];
+      if (streak && streak.current > 0) {
+        updateDuelScore(userId, "streak_maintained").catch((err) =>
+          console.error("[duels] streak score", err),
+        );
+      }
     } else {
       // Failed quiz with retries remaining — only save attempt count
       await prisma.lessonProgress.upsert({

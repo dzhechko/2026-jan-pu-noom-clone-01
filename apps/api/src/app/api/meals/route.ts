@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiError } from "@/lib/errors";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { updateDuelScore } from "@/lib/engines/duel-engine";
 
 const createMealSchema = z.object({
   mealType: z.enum(["breakfast", "lunch", "dinner", "snack"]),
@@ -126,6 +127,11 @@ export async function POST(req: Request): Promise<NextResponse> {
         loggedAt: true,
       },
     });
+
+    // Fire-and-forget duel score update
+    updateDuelScore(userId, "meal_logged").catch((err) =>
+      console.error("[duels] meal score", err),
+    );
 
     return NextResponse.json({ meal }, { status: 201 });
   } catch (error) {
