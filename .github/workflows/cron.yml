@@ -1,0 +1,66 @@
+name: Scheduled Cron Jobs
+
+on:
+  schedule:
+    # Notifications (hourly at :05)
+    - cron: "5 * * * *"
+    # Subscriptions (hourly at :10)
+    - cron: "10 * * * *"
+    # Duels (every 15 minutes)
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  notifications:
+    if: github.event.schedule == '5 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger notifications cron
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.API_URL }}/api/notifications/cron" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json") || true
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Notifications cron failed with status $STATUS"
+            curl -sf -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
+              -H "Content-Type: application/json" \
+              -d "{\"chat_id\":\"${{ secrets.TG_CHAT_ID }}\",\"text\":\"⚠️ Notifications cron failed (HTTP $STATUS)\"}" || true
+            exit 1
+          fi
+
+  subscriptions:
+    if: github.event.schedule == '10 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger subscription cron
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.API_URL }}/api/subscription/cron" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json") || true
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Subscription cron failed with status $STATUS"
+            curl -sf -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
+              -H "Content-Type: application/json" \
+              -d "{\"chat_id\":\"${{ secrets.TG_CHAT_ID }}\",\"text\":\"⚠️ Subscription cron failed (HTTP $STATUS)\"}" || true
+            exit 1
+          fi
+
+  duels:
+    if: github.event.schedule == '*/15 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger duels cron
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.API_URL }}/api/duels/cron" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json") || true
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Duels cron failed with status $STATUS"
+            curl -sf -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
+              -H "Content-Type: application/json" \
+              -d "{\"chat_id\":\"${{ secrets.TG_CHAT_ID }}\",\"text\":\"⚠️ Duels cron failed (HTTP $STATUS)\"}" || true
+            exit 1
+          fi

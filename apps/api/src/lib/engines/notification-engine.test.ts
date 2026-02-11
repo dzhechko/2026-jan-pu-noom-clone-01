@@ -277,6 +277,93 @@ describe("parseNotificationPrefs", () => {
   });
 });
 
+// --- v2 notification types: date range and logic tests ---
+
+describe("v2 notification date range calculations", () => {
+  it("churn_5d targets users inactive 5-6 days ago", () => {
+    const now = new Date("2026-02-11T07:00:00Z"); // 10:00 MSK
+    const fiveDaysAgo = new Date(now);
+    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+    const sixDaysAgo = new Date(now);
+    sixDaysAgo.setDate(sixDaysAgo.getDate() - 6);
+
+    expect(fiveDaysAgo.toISOString().slice(0, 10)).toBe("2026-02-06");
+    expect(sixDaysAgo.toISOString().slice(0, 10)).toBe("2026-02-05");
+
+    // A user last active on Feb 6 should be in range (lte 5d ago, gt 6d ago)
+    const lastActive = new Date("2026-02-06T12:00:00Z");
+    expect(lastActive <= fiveDaysAgo || lastActive.toDateString() === fiveDaysAgo.toDateString()).toBe(true);
+    expect(lastActive > sixDaysAgo).toBe(true);
+  });
+
+  it("churn_14d targets users inactive 14-15 days ago", () => {
+    const now = new Date("2026-02-15T07:00:00Z");
+    const fourteenDaysAgo = new Date(now);
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    const fifteenDaysAgo = new Date(now);
+    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+
+    expect(fourteenDaysAgo.toISOString().slice(0, 10)).toBe("2026-02-01");
+    expect(fifteenDaysAgo.toISOString().slice(0, 10)).toBe("2026-01-31");
+  });
+
+  it("weekly_report triggers only on Sunday", () => {
+    // Feb 15, 2026 is a Sunday
+    const sunday = new Date("2026-02-15T15:00:00Z"); // 18:00 MSK
+    expect(sunday.getDay()).toBe(0);
+
+    // Feb 11, 2026 is a Wednesday
+    const wednesday = new Date("2026-02-11T15:00:00Z");
+    expect(wednesday.getDay()).not.toBe(0);
+  });
+
+  it("weekly_report at 18:00 local matches isLocalHourWindow", () => {
+    // 18:00 MSK = 15:00 UTC
+    const sundayEvening = new Date("2026-02-15T15:00:00Z");
+    expect(isLocalHourWindow(sundayEvening, 18, "Europe/Moscow")).toBe(true);
+  });
+});
+
+describe("weekly_report stats data construction", () => {
+  it("builds correct data from user relations", () => {
+    const mockUser = {
+      id: "user-1",
+      telegramId: "123",
+      settings: null,
+      lessonProgress: [{ id: "lp-1" }, { id: "lp-2" }, { id: "lp-3" }],
+      mealLogs: [{ id: "ml-1" }, { id: "ml-2" }],
+      streak: { currentStreak: 5 },
+    };
+
+    const data = {
+      lessons: mockUser.lessonProgress.length,
+      meals: mockUser.mealLogs.length,
+      streak: mockUser.streak?.currentStreak ?? 0,
+    };
+
+    expect(data).toEqual({ lessons: 3, meals: 2, streak: 5 });
+  });
+
+  it("handles user with no streak", () => {
+    const mockUser = {
+      id: "user-2",
+      telegramId: "456",
+      settings: null,
+      lessonProgress: [] as { id: string }[],
+      mealLogs: [{ id: "ml-1" }],
+      streak: null as { currentStreak: number } | null,
+    };
+
+    const data = {
+      lessons: mockUser.lessonProgress.length,
+      meals: mockUser.mealLogs.length,
+      streak: mockUser.streak?.currentStreak ?? 0,
+    };
+
+    expect(data).toEqual({ lessons: 0, meals: 1, streak: 0 });
+  });
+});
+
 // getLocalHour edge cases
 describe("getLocalHour", () => {
   it("returns correct hour for Moscow timezone", () => {

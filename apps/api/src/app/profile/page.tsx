@@ -192,6 +192,20 @@ export default function ProfilePage(): React.JSX.Element {
           </div>
         </Card>
 
+        {/* Settings */}
+        <Card>
+          <a
+            href="/profile/notifications"
+            className="flex items-center justify-between py-1"
+          >
+            <div>
+              <p className="text-sm font-medium text-tg-text">Уведомления</p>
+              <p className="text-xs text-tg-hint">Типы, часовой пояс, тихие часы</p>
+            </div>
+            <span className="text-tg-hint text-lg">&rsaquo;</span>
+          </a>
+        </Card>
+
         {/* Logout */}
         <Button
           variant="ghost"
