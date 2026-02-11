@@ -1,0 +1,165 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum SubscriptionTier {
+  free
+  premium
+  clinical
+}
+
+enum Gender {
+  male
+  female
+}
+
+enum ActivityLevel {
+  sedentary
+  light
+  moderate
+  active
+}
+
+model User {
+  id                  String           @id @default(uuid())
+  email               String           @unique
+  passwordHash        String           @map("password_hash")
+  name                String
+  subscriptionTier    SubscriptionTier @default(free) @map("subscription_tier")
+  subscriptionExpires DateTime?        @map("subscription_expires_at")
+  vkId                String?          @unique @map("vk_id")
+  settings            Json             @default("{}")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+
+  medicalProfile  MedicalProfile?
+  lessonProgress  LessonProgress[]
+  mealLogs        MealLog[]
+  coachMessages   CoachMessage[]
+  streak          Streak?
+  gamification    Gamification?
+  challengerDuels Duel[]           @relation("challenger")
+  opponentDuels   Duel[]           @relation("opponent")
+
+  @@map("users")
+}
+
+model MedicalProfile {
+  id            String        @id @default(uuid())
+  userId        String        @unique @map("user_id")
+  gender        Gender
+  birthDate     DateTime      @map("birth_date")
+  heightCm      Int           @map("height_cm")
+  weightKg      Decimal       @map("weight_kg")
+  bmi           Decimal
+  metabolicAge  Int           @map("metabolic_age")
+  activityLevel ActivityLevel @map("activity_level")
+  risks         Json          @default("[]")
+  quizAnswers   Json          @map("quiz_answers")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("medical_profiles")
+}
+
+model LessonProgress {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  lessonId    Int       @map("lesson_id")
+  status      String    @default("locked") // locked, available, completed, review_needed
+  quizScore   Int?      @map("quiz_score")
+  completedAt DateTime? @map("completed_at")
+  xpEarned    Int       @default(0) @map("xp_earned")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@map("lesson_progress")
+}
+
+model MealLog {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  mealType          String   @map("meal_type") // breakfast, lunch, dinner, snack
+  dishName          String   @map("dish_name")
+  photoUrl          String?  @map("photo_url")
+  calories          Int
+  proteinG          Decimal  @map("protein_g")
+  fatG              Decimal  @map("fat_g")
+  carbsG            Decimal  @map("carbs_g")
+  portionG          Int      @map("portion_g")
+  recognitionMethod String   @map("recognition_method") // ai_photo, manual_search, manual_entry
+  aiConfidence      Decimal? @map("ai_confidence")
+  loggedAt          DateTime @default(now()) @map("logged_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, loggedAt])
+  @@map("meal_logs")
+}
+
+model CoachMessage {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  role      String   // user, assistant
+  content   String
+  context   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("coach_messages")
+}
+
+model Streak {
+  id             String   @id @default(uuid())
+  userId         String   @unique @map("user_id")
+  currentStreak  Int      @default(0) @map("current_streak")
+  longestStreak  Int      @default(0) @map("longest_streak")
+  lastActiveDate DateTime @map("last_active_date")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("streaks")
+}
+
+model Gamification {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  xpTotal   Int      @default(0) @map("xp_total")
+  level     Int      @default(1)
+  badges    Json     @default("[]")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("gamification")
+}
+
+model Duel {
+  id              String    @id @default(uuid())
+  challengerId    String    @map("challenger_id")
+  opponentId      String?   @map("opponent_id")
+  inviteToken     String    @unique @map("invite_token")
+  status          String    @default("pending") // pending, active, completed, expired
+  startDate       DateTime? @map("start_date")
+  endDate         DateTime? @map("end_date")
+  challengerScore Int       @default(0) @map("challenger_score")
+  opponentScore   Int       @default(0) @map("opponent_score")
+  winnerId        String?   @map("winner_id")
+  expiresAt       DateTime  @map("expires_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  challenger User  @relation("challenger", fields: [challengerId], references: [id])
+  opponent   User? @relation("opponent", fields: [opponentId], references: [id])
+
+  @@map("duels")
+}
