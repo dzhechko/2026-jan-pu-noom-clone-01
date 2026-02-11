@@ -74,7 +74,13 @@ export async function POST(req: Request): Promise<NextResponse> {
       return NextResponse.json(body, { status });
     }
 
-    // 5. Compare password
+    // 5. Compare password (passwordHash is null for Telegram-only users)
+    if (!user.passwordHash) {
+      await incrementFailures(normalizedEmail);
+      const { body, status } = apiError("AUTH_001");
+      return NextResponse.json(body, { status });
+    }
+
     const isValid = await comparePassword(password, user.passwordHash);
 
     if (!isValid) {
