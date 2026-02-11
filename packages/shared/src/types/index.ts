@@ -16,6 +16,65 @@ export type RecognitionMethod = "ai_photo" | "manual_search" | "manual_entry";
 
 export type LessonStatus = "locked" | "available" | "completed" | "review_needed";
 
+export type LessonListStatus = LessonStatus | "paywall";
+
+export interface LessonListItem {
+  id: number;
+  title: string;
+  status: LessonListStatus;
+  quizScore: number | null;
+  xpEarned: number;
+}
+
+export interface LessonQuizQuestion {
+  id: number;
+  question: string;
+  options: string[];
+}
+
+export interface LessonQuizQuestionWithAnswer extends LessonQuizQuestion {
+  correctAnswer: number;
+}
+
+export interface LessonContent {
+  id: number;
+  title: string;
+  description: string;
+  sections: {
+    theory: string;
+    example: string;
+    quiz: { questions: LessonQuizQuestion[] };
+    assignment: string;
+  };
+}
+
+export interface LessonContentFull {
+  id: number;
+  title: string;
+  description: string;
+  sections: {
+    theory: string;
+    example: string;
+    quiz: { questions: LessonQuizQuestionWithAnswer[] };
+    assignment: string;
+  };
+}
+
+export interface LessonCompletionResult {
+  score: number;
+  passed: boolean;
+  xpEarned: number;
+  status: LessonStatus;
+  attemptsUsed: number;
+  attemptsRemaining: number;
+  streak: {
+    current: number;
+    longest: number;
+    bonusXp: number;
+  } | null;
+  nextLessonId: number | null;
+}
+
 export type DuelStatus = "pending" | "active" | "completed" | "expired";
 
 export type MedicalCondition = "diabetes" | "hypertension" | "thyroid";

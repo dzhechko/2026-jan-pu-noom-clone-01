@@ -72,10 +72,11 @@ model LessonProgress {
   id          String    @id @default(uuid())
   userId      String    @map("user_id")
   lessonId    Int       @map("lesson_id")
-  status      String    @default("locked") // locked, available, completed, review_needed
-  quizScore   Int?      @map("quiz_score")
-  completedAt DateTime? @map("completed_at")
-  xpEarned    Int       @default(0) @map("xp_earned")
+  status       String    @default("locked") // locked, available, completed, review_needed
+  quizScore    Int?      @map("quiz_score")
+  quizAttempts Int       @default(0) @map("quiz_attempts")
+  completedAt  DateTime? @map("completed_at")
+  xpEarned     Int       @default(0) @map("xp_earned")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

@@ -31,6 +31,33 @@ export const RATE_LIMITS = {
 
 export const TOTAL_LESSONS = 14;
 export const FREE_LESSON_LIMIT = 3;
+export const MAX_QUIZ_ATTEMPTS = 3;
+export const QUIZ_PASS_THRESHOLD = 2;
+export const QUIZ_QUESTIONS_PER_LESSON = 3;
+
+export const LESSON_XP = {
+  perfect: 15, // 3/3
+  passed: 10, // 2/3
+  reviewNeeded: 5, // after 3 failed attempts
+} as const;
+
+export const LESSON_TITLES: Record<number, string> = {
+  1: "Что такое CBT и как оно работает",
+  2: "Автоматические мысли о еде",
+  3: "Связь эмоций и переедания",
+  4: "Когнитивные искажения при диете",
+  5: "Дневник мыслей: практика",
+  6: "Осознанное питание",
+  7: "Триггеры переедания",
+  8: "Работа с чувством вины",
+  9: "Стресс и кортизол",
+  10: "Социальное давление и еда",
+  11: "Формирование новых привычек",
+  12: "Мотивация и ценности",
+  13: "Предотвращение срывов",
+  14: "Долгосрочная стратегия",
+} as const;
+
 export const DUEL_DURATION_DAYS = 7;
 export const DUEL_INVITE_EXPIRY_HOURS = 72;
 export const MAX_ACTIVE_DUELS = 1;
