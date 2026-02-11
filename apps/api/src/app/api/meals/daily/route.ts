@@ -16,7 +16,7 @@ export async function GET(req: Request): Promise<NextResponse> {
 
     const url = new URL(req.url);
     const dateParam = url.searchParams.get("date");
-    const parsed = dailySummarySchema.safeParse({ date: dateParam });
+    const parsed = dailySummarySchema.safeParse({ date: dateParam ?? undefined });
 
     if (!parsed.success) {
       return NextResponse.json(
