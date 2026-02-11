@@ -33,7 +33,7 @@ Feature: Free Trial Activation
     And I see confirmation: "Пробный период активен до {expiry_date}"
     And my subscriptionTier is set to "premium"
     And my subscriptionExpires is set to now + 7 days
-    And my trialStartedAt is set to now
+    And my hasUsedTrial is set to true
     And all Premium features unlock immediately:
       | feature | status |
       | Lessons 4-14 | unlocked |
@@ -42,9 +42,9 @@ Feature: Free Trial Activation
     And I am redirected to the previously blocked content
 
   Scenario: Trial already used
-    Given I previously started a trial (trialStartedAt is not null)
+    Given I previously used my trial (hasUsedTrial = true)
     When I try to start a trial again
-    Then I see error: "Пробный период уже был использован"
+    Then I see error: "Пробный период уже был использован" (PAY_003)
     And I see CTA: "Оплатить подписку — 250 Stars/мес"
 
   Scenario: Already a premium user
@@ -190,15 +190,13 @@ Feature: Telegram Payment Webhook
       | provider_payment_charge_id | "provider_xyz789" |
       | total_amount | 250 |
       | currency | "XTR" |
-    Then the server creates a Subscription record:
+    Then the server creates a SubscriptionLog record:
       | field | value |
       | userId | "{user_id}" |
-      | telegramChargeId | "charge_abc123" |
+      | event | "payment_success" |
+      | telegramPaymentChargeId | "charge_abc123" |
       | amount | 250 |
       | currency | "XTR" |
-      | status | "completed" |
-      | periodStart | now |
-      | periodEnd | now + 30 days |
     And the User record is updated:
       | field | value |
       | subscriptionTier | "premium" |
@@ -206,10 +204,10 @@ Feature: Telegram Payment Webhook
     And the server returns 200 OK
 
   Scenario: Duplicate webhook (idempotency)
-    Given a payment with telegramChargeId "charge_abc123" was already processed
+    Given a payment with telegramPaymentChargeId "charge_abc123" was already processed
     When Telegram sends the same successful_payment again
     Then the server returns 200 OK (not an error)
-    And no duplicate Subscription record is created
+    And no duplicate SubscriptionLog record is created
     And the subscription is NOT extended again
 
   Scenario: Invalid amount
@@ -317,7 +315,7 @@ Feature: Paywall Page
     And the hero text says: "Соревнуйтесь с друзьями"
 
   Scenario: Trial already used — show payment CTA
-    Given I already used my trial (trialStartedAt is not null)
+    Given I already used my trial (hasUsedTrial = true)
     When I view the paywall
     Then the primary CTA says "Оплатить 250 Stars/мес" (not trial)
     And the trial offer is hidden
@@ -380,14 +378,14 @@ Start a 7-day free trial. Requires that the user has never used a trial before.
 ```typescript
 // No body needed — user identity from JWT
 // Server-side validation:
-// - user.trialStartedAt must be null
+// - user.hasUsedTrial must be null
 // - user.subscriptionTier must be "free"
 ```
 
 **Side Effects:**
 - User.subscriptionTier = "premium"
 - User.subscriptionExpires = now + 7 days
-- User.trialStartedAt = now
+- User.hasUsedTrial = true
 
 ---
 
@@ -479,12 +477,12 @@ Get current subscription status for the authenticated user.
 
 **Status Logic:**
 ```
-IF tier == "free" AND trialStartedAt == null       → status = "free"
-IF tier == "free" AND trialStartedAt != null        → status = "expired"
-IF tier == "premium" AND trialStartedAt != null
-   AND no Subscription records with status=completed → status = "trial"
-IF tier == "premium" AND cancelledAt != null         → status = "cancelled"
-IF tier == "premium" AND cancelledAt == null          → status = "active"
+IF tier == "free" AND hasUsedTrial == false        → status = "free"
+IF tier == "free" AND hasUsedTrial == true         → status = "expired"
+IF tier == "premium" AND hasUsedTrial == true
+   AND no SubscriptionLog with event="payment_success" → status = "trial"
+IF tier == "premium" AND subscriptionCancelledAt != null → status = "cancelled"
+IF tier == "premium" AND subscriptionCancelledAt == null → status = "active"
 ```
 
 ---
@@ -536,7 +534,7 @@ Cancel subscription at period end. User keeps access until subscriptionExpires.
 ```
 
 **Side Effects:**
-- User.cancelledAt = now
+- User.subscriptionCancelledAt = now
 - User.subscriptionTier remains "premium" (until expiry cron runs)
 
 ---
@@ -651,15 +649,15 @@ IF update.pre_checkout_query:
 
 IF update.message.successful_payment:
   1. Extract telegramChargeId from successful_payment
-  2. Check idempotency: if Subscription with this chargeId exists, return 200
-  3. Find user by telegramId from message.from.id
-  4. Validate amount == 250 AND currency == "XTR"
+  2. Validate amount == 250 AND currency == "XTR"
+  3. Check idempotency: if SubscriptionLog with this telegramPaymentChargeId exists, return 200
+  4. Parse invoice_payload to get userId
   5. Calculate new expiry:
      - If user.subscriptionExpires > now: newExpiry = subscriptionExpires + 30 days
      - Else: newExpiry = now + 30 days
-  6. Create Subscription record (payment history)
+  6. Create SubscriptionLog record (event: "payment_success")
   7. Update User: subscriptionTier = premium,
-     subscriptionExpires = newExpiry, cancelledAt = null
+     subscriptionExpires = newExpiry, subscriptionCancelledAt = null
   8. Return 200 OK
 ```
 
@@ -691,7 +689,7 @@ Expire trials and subscriptions. Called by external cron scheduler with CRON_SEC
 
 2. Find users WHERE subscriptionTier = "premium"
    AND subscriptionExpires BETWEEN now AND now + 24h
-   AND no Subscription records with status=completed (i.e., still on trial)
+   AND hasUsedTrial = true AND no SubscriptionLog with event="payment_success" (i.e., still on trial)
    → Send trial expiry notification via notification engine
 
 3. Return counts
@@ -706,41 +704,45 @@ Expire trials and subscriptions. Called by external cron scheduler with CRON_SEC
 ```prisma
 model User {
   // ... existing fields ...
-  trialStartedAt    DateTime?  @map("trial_started_at")
-  cancelledAt       DateTime?  @map("cancelled_at")
+  hasUsedTrial           Boolean   @default(false) @map("has_used_trial")
+  subscriptionCancelledAt DateTime? @map("subscription_cancelled_at")
   // subscriptionTier and subscriptionExpires already exist
+  // ... existing relations ...
+  subscriptionLogs       SubscriptionLog[]
 }
 ```
 
-### New Model: Subscription (Payment History)
+Note: Uses `hasUsedTrial` (boolean) rather than `hasUsedTrial` (DateTime) because:
+- Only need to know IF trial was used, not WHEN (the trial end date = subscriptionExpires)
+- Simpler check: `hasUsedTrial == true` vs `hasUsedTrial != null`
+- The `trialEndsAt` in API responses is derived from `subscriptionExpires` when in trial status
+
+### New Model: SubscriptionLog (Event Log + Payment History)
 
 ```prisma
-model Subscription {
-  id                    String   @id @default(uuid())
-  userId                String   @map("user_id")
-  telegramChargeId      String   @unique @map("telegram_charge_id")
-  providerChargeId      String?  @map("provider_charge_id")
-  amount                Int      // 250 (Stars)
-  currency              String   @default("XTR") // Telegram Stars
-  status                String   @default("completed") // completed, refunded
-  periodStart           DateTime @map("period_start")
-  periodEnd             DateTime @map("period_end")
-  createdAt             DateTime @default(now()) @map("created_at")
+model SubscriptionLog {
+  id                       String    @id @default(uuid())
+  userId                   String    @map("user_id")
+  event                    String    // trial_started, payment_success, payment_failed, subscription_cancelled, subscription_expired, subscription_renewed
+  amount                   Int?      // Telegram Stars amount (null for non-payment events)
+  currency                 String?   @default("XTR") // XTR = Telegram Stars
+  telegramPaymentChargeId  String?   @unique @map("telegram_payment_charge_id")
+  providerPaymentChargeId  String?   @map("provider_payment_charge_id")
+  metadata                 Json      @default("{}")
+  createdAt                DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
-  @@map("subscriptions")
+  @@index([event, createdAt])
+  @@map("subscription_logs")
 }
 ```
 
-Add to User model:
-```prisma
-model User {
-  // ... existing relations ...
-  subscriptions      Subscription[]
-}
-```
+Note: Uses a single `SubscriptionLog` model (event sourcing) rather than a separate `Subscription` model because:
+- Captures both payment events AND lifecycle events (trial, cancel, expire, renew) in one table
+- Unique constraint on `telegramPaymentChargeId` provides replay protection
+- Simpler queries: count `event = "payment_success"` to distinguish trial from paid users
 
 ---
 
@@ -770,7 +772,7 @@ Subscription Flow States:
   [expired/free] → [active]  (re-subscribe after expiry)
 
 Transitions:
-  free → trial:       POST /api/subscription/trial (trialStartedAt = now)
+  free → trial:       POST /api/subscription/trial (hasUsedTrial = now)
   trial → active:     Webhook successful_payment (during trial)
   trial → expired:    Cron job (subscriptionExpires < now, no payment)
   active → cancelled: POST /api/subscription/cancel (cancelledAt = now)
@@ -822,9 +824,9 @@ export const SUBSCRIPTION_FEATURES_LOST = [
 | Requirement | Implementation |
 |-------------|---------------|
 | Webhook authentication | Verify request comes from Telegram (bot token in URL path or signature check) |
-| Idempotent payments | Unique constraint on `telegramChargeId` prevents double-processing |
+| Idempotent payments | Unique constraint on `telegramPaymentChargeId` in SubscriptionLog prevents double-processing |
 | Amount validation | Server-side check: `total_amount === 250 AND currency === "XTR"` |
-| Trial abuse prevention | `trialStartedAt` flag per user — one trial per telegramId ever |
+| Trial abuse prevention | `hasUsedTrial` boolean per user — one trial per account ever |
 | Payload integrity | Invoice payload includes userId + timestamp, verified on webhook |
 | No client-side subscription state | Server is single source of truth — client always fetches from API |
 
@@ -870,7 +872,7 @@ Add new notification types to the existing notification engine (F8):
 |------|---------|
 | `apps/api/src/lib/engines/subscription-engine.ts` | Business logic: trial, cancel, expiry, status |
 | `apps/api/src/lib/engines/subscription-engine.test.ts` | Unit tests for subscription engine |
-| `apps/api/src/lib/telegram-payments.ts` | Telegram Bot Payments API client (createInvoice, answerPreCheckoutQuery) |
+| `apps/api/src/lib/telegram-payments.ts` | Telegram Bot Payments API client (createInvoiceLink, answerPreCheckoutQuery) |
 | `apps/api/src/lib/validators/subscription.ts` | Zod schemas for webhook payload validation |
 | `apps/api/src/app/api/subscription/trial/route.ts` | POST /api/subscription/trial |
 | `apps/api/src/app/api/subscription/status/route.ts` | GET /api/subscription/status |
@@ -888,10 +890,10 @@ Add new notification types to the existing notification engine (F8):
 
 | File | Change |
 |------|--------|
-| `apps/api/prisma/schema.prisma` | Add Subscription model, trialStartedAt + cancelledAt to User |
+| `apps/api/prisma/schema.prisma` | Add SubscriptionLog model, hasUsedTrial + subscriptionCancelledAt to User |
 | `packages/shared/src/types/index.ts` | Add SubscriptionStatus, SubscriptionInfo types |
 | `packages/shared/src/constants/index.ts` | Add subscription constants |
-| `apps/api/src/lib/errors.ts` | Add PAY_003 through PAY_006 error codes |
+| `apps/api/src/lib/errors.ts` | Remap PAY_001/PAY_002, add PAY_003 through PAY_006 error codes |
 | `apps/api/src/app/lessons/[id]/page.tsx` | Redirect to /paywall on LESSON_001 instead of just showing error |
 | `apps/api/src/app/duels/page.tsx` | Redirect to /paywall on free tier check |
 | `apps/api/src/app/coach/page.tsx` | Redirect to /paywall on free tier check |
