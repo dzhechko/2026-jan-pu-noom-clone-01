@@ -1,19 +1,9 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { apiError } from "@/lib/errors";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { updateDuelScore } from "@/lib/engines/duel-engine";
-
-const createMealSchema = z.object({
-  mealType: z.enum(["breakfast", "lunch", "dinner", "snack"]),
-  dishName: z.string().min(1).max(200),
-  calories: z.number().int().min(0).max(10000),
-  proteinG: z.number().min(0).max(1000),
-  fatG: z.number().min(0).max(1000),
-  carbsG: z.number().min(0).max(1000),
-  portionG: z.number().int().min(1).max(5000),
-});
+import { createMealSchema } from "@/lib/validators/meals";
 
 export async function GET(req: Request): Promise<NextResponse> {
   try {
