@@ -26,5 +26,8 @@ CREATE INDEX "subscription_logs_user_id_created_at_idx" ON "subscription_logs"("
 -- CreateIndex: event + created_at
 CREATE INDEX "subscription_logs_event_created_at_idx" ON "subscription_logs"("event", "created_at");
 
+-- CreateIndex: composite index on users for expiration queries
+CREATE INDEX "users_subscription_tier_subscription_expires_at_idx" ON "users"("subscription_tier", "subscription_expires_at");
+
 -- AddForeignKey
 ALTER TABLE "subscription_logs" ADD CONSTRAINT "subscription_logs_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

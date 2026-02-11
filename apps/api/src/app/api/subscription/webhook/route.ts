@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import { createHash } from "crypto";
 import { timingSafeEqual } from "crypto";
+import { webhookUpdateSchema } from "@/lib/validators/subscription";
 import { handleWebhookUpdate } from "@/lib/engines/subscription-engine";
 
 function verifyWebhookSecret(received: string | null): boolean {
-  const botToken = process.env.TG_BOT_TOKEN;
-  if (!botToken || !received) return false;
-
-  const expected = createHash("sha256").update(botToken).digest("hex");
+  const expected = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!expected || !received) return false;
   if (expected.length !== received.length) return false;
 
   try {
@@ -25,8 +23,14 @@ export async function POST(req: Request): Promise<NextResponse> {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const update = await req.json();
-    await handleWebhookUpdate(update);
+    const raw = await req.json();
+    const parsed = webhookUpdateSchema.safeParse(raw);
+    if (!parsed.success) {
+      console.warn("[webhook] invalid payload", parsed.error.issues);
+      return NextResponse.json({ ok: true });
+    }
+
+    await handleWebhookUpdate(parsed.data);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

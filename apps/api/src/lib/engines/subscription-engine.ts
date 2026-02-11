@@ -186,13 +186,10 @@ export function shouldDowngradeWithActiveDuel(
 // --- DB-dependent functions ---
 
 export async function startTrial(userId: string): Promise<SubscriptionStatus> {
+  // Pre-flight check for better error messages (non-atomic)
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: {
-      id: true,
-      subscriptionTier: true,
-      hasUsedTrial: true,
-    },
+    select: { id: true, subscriptionTier: true, hasUsedTrial: true },
   });
   if (!user) throw new SubscriptionError("AUTH_001");
 
@@ -208,24 +205,32 @@ export async function startTrial(userId: string): Promise<SubscriptionStatus> {
 
   const expiresAt = calculateTrialExpiry(new Date());
 
-  await prisma.$transaction([
-    prisma.user.update({
-      where: { id: userId },
-      data: {
-        subscriptionTier: "premium",
-        subscriptionExpires: expiresAt,
-        hasUsedTrial: true,
-      },
-    }),
-    prisma.subscriptionLog.create({
-      data: {
-        userId,
-        event: "trial_started",
-        amount: 0,
-        currency: "XTR",
-      },
-    }),
-  ]);
+  // Atomic update with WHERE conditions to prevent TOCTOU race
+  const updated = await prisma.user.updateMany({
+    where: {
+      id: userId,
+      subscriptionTier: "free",
+      hasUsedTrial: false,
+    },
+    data: {
+      subscriptionTier: "premium",
+      subscriptionExpires: expiresAt,
+      hasUsedTrial: true,
+    },
+  });
+
+  if (updated.count === 0) {
+    throw new SubscriptionError("PAY_003", { reason: "trial_already_used" });
+  }
+
+  await prisma.subscriptionLog.create({
+    data: {
+      userId,
+      event: "trial_started",
+      amount: 0,
+      currency: "XTR",
+    },
+  });
 
   return {
     tier: "premium",
@@ -514,21 +519,28 @@ export async function processExpirations(): Promise<{
       },
     });
 
-    // Log expirations
-    for (const user of expiredUsers) {
-      await prisma.subscriptionLog.create({
-        data: {
-          userId: user.id,
-          event: "subscription_expired",
-          amount: 0,
-          currency: "XTR",
-        },
-      });
+    // Batch log expirations (single createMany instead of N inserts)
+    await prisma.subscriptionLog.createMany({
+      data: userIds.map((uid) => ({
+        userId: uid,
+        event: "subscription_expired",
+        amount: 0,
+        currency: "XTR",
+      })),
+    });
 
-      const paymentCount = await prisma.subscriptionLog.count({
-        where: { userId: user.id, event: "payment_success" },
-      });
-      if (paymentCount === 0) trialsExpired++;
+    // Batch payment count (single groupBy instead of N counts)
+    const paymentCounts = await prisma.subscriptionLog.groupBy({
+      by: ["userId"],
+      where: { userId: { in: userIds }, event: "payment_success" },
+      _count: { _all: true },
+    });
+    const paymentMap = new Map(
+      paymentCounts.map((p) => [p.userId, p._count._all]),
+    );
+
+    for (const user of expiredUsers) {
+      if ((paymentMap.get(user.id) ?? 0) === 0) trialsExpired++;
       else subscriptionsExpired++;
     }
 
@@ -555,15 +567,24 @@ export async function processExpirations(): Promise<{
     take: 1000,
   });
 
-  for (const user of trialUsers) {
-    const paymentCount = await prisma.subscriptionLog.count({
-      where: { userId: user.id, event: "payment_success" },
+  if (trialUsers.length > 0) {
+    const trialUserIds = trialUsers.map((u) => u.id);
+    const trialPaymentCounts = await prisma.subscriptionLog.groupBy({
+      by: ["userId"],
+      where: { userId: { in: trialUserIds }, event: "payment_success" },
+      _count: { _all: true },
     });
-    if (paymentCount === 0) {
-      sendNotification(user.id, "trial_expiring" as never, {}).catch((err) =>
-        console.error("[subscription] trial warning", err),
-      );
-      trialWarningsSent++;
+    const trialPaymentMap = new Map(
+      trialPaymentCounts.map((p) => [p.userId, p._count._all]),
+    );
+
+    for (const user of trialUsers) {
+      if ((trialPaymentMap.get(user.id) ?? 0) === 0) {
+        sendNotification(user.id, "trial_expiring" as never, {}).catch((err) =>
+          console.error("[subscription] trial warning", err),
+        );
+        trialWarningsSent++;
+      }
     }
   }
 
@@ -613,7 +634,7 @@ export async function handlePreCheckoutQuery(query: {
       select: { id: true },
     });
     if (!user) {
-      await answerPreCheckoutQuery(query.id, false, "Пользователь не найден");
+      await answerPreCheckoutQuery(query.id, false, "Неверные данные заказа");
       return;
     }
 
