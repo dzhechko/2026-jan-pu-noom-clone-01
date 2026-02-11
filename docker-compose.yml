@@ -1,0 +1,61 @@
+version: "3.8"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://vesna:vesna_dev@postgres:5432/vesna
+      - REDIS_URL=redis://redis:6379
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - FOOD_RECOGNITION_API_KEY=${FOOD_RECOGNITION_API_KEY}
+    volumes:
+      - ./apps/api:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: vesna
+      POSTGRES_PASSWORD: vesna_dev
+      POSTGRES_DB: vesna
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: vesna_minio
+      MINIO_ROOT_PASSWORD: vesna_minio_secret
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

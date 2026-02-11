@@ -1,0 +1,33 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if [ -f docs/insights.md ]; then git add docs/insights.md && git diff --cached --quiet docs/insights.md || git commit -m \"docs: auto-save insights\"; fi'"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(docker *)",
+      "Bash(git *)",
+      "Bash(curl *)",
+      "Bash(cat *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(rm *)",
+      "Bash(flutter *)",
+      "Bash(dart *)"
+    ],
+    "deny": []
+  }
+}

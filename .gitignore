@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnp.*
+
+# Build
+.next/
+dist/
+build/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flutter
+apps/mobile/.dart_tool/
+apps/mobile/build/
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/.packages
+apps/mobile/ios/Pods/
+apps/mobile/ios/.symlinks/
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Prisma
+prisma/migrations/*.sql.bak
+
+# MinIO data (local)
+minio_data/
+
+# Backups (local)
+backups/
+
+# Insights (auto-committed separately)
+# docs/insights.md  — tracked, but auto-committed via hook
