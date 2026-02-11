@@ -126,6 +126,32 @@ export interface DuelCreateResult {
   expiresAt: string;
 }
 
+// --- Notifications ---
+
+export type NotificationType =
+  | "lesson_reminder"
+  | "streak_risk"
+  | "churn_2d"
+  | "churn_5d"
+  | "churn_14d"
+  | "duel_accepted"
+  | "duel_completed"
+  | "weekly_report";
+
+export interface NotificationPrefs {
+  lessonReminder: boolean;
+  streakRisk: boolean;
+  churnPrevention: boolean;
+  duelEvents: boolean;
+  weeklyReport: boolean;
+}
+
+export interface NotificationMessage {
+  text: string;
+  buttonText: string;
+  buttonUrl: string;
+}
+
 export type MedicalCondition = "diabetes" | "hypertension" | "thyroid";
 
 export type QuizQuestionType = "radio" | "number" | "select" | "multiselect";

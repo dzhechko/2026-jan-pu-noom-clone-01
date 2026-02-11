@@ -76,6 +76,81 @@ export const DUEL_XP_REWARDS = {
 export const DUEL_WINNER_BADGE = "Чемпион Дуэли";
 export const MAX_COACH_MESSAGE_LENGTH = 2000;
 
+// --- Notifications constants ---
+
+import type { NotificationType, NotificationPrefs, NotificationMessage } from "../types/index";
+
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+  lessonReminder: true,
+  streakRisk: true,
+  churnPrevention: true,
+  duelEvents: true,
+  weeklyReport: true,
+};
+
+export const DEFAULT_TIMEZONE = "Europe/Moscow";
+export const NOTIFICATION_DAILY_CAP = 3;
+export const NOTIFICATION_QUIET_START = 22; // 22:00
+export const NOTIFICATION_QUIET_END = 8;   // 08:00
+export const NOTIFICATION_RATE_DELAY_MS = 35; // 35ms between sends (≈28/sec)
+
+export const NOTIFICATION_PREF_MAP: Record<NotificationType, keyof NotificationPrefs> = {
+  lesson_reminder: "lessonReminder",
+  streak_risk: "streakRisk",
+  churn_2d: "churnPrevention",
+  churn_5d: "churnPrevention",
+  churn_14d: "churnPrevention",
+  duel_accepted: "duelEvents",
+  duel_completed: "duelEvents",
+  weekly_report: "weeklyReport",
+};
+
+export const NOTIFICATION_TEMPLATES: Record<
+  NotificationType,
+  (data: Record<string, string | number>) => NotificationMessage
+> = {
+  lesson_reminder: () => ({
+    text: "📚 <b>Урок ждёт!</b>\n3 минуты для новых привычек",
+    buttonText: "Открыть урок",
+    buttonUrl: "/lessons",
+  }),
+  streak_risk: (data) => ({
+    text: `🔥 <b>Streak на кону!</b>\nВаша серия ${data.streak} дней. Не потеряйте!`,
+    buttonText: "Продолжить серию",
+    buttonUrl: "/lessons",
+  }),
+  churn_2d: () => ({
+    text: "👋 <b>Мы скучаем!</b>\nВаш AI-коуч подготовил новый совет",
+    buttonText: "Поговорить с коучем",
+    buttonUrl: "/coach",
+  }),
+  churn_5d: () => ({
+    text: "💪 <b>Ваш прогресс сохранён!</b>\nВернитесь и продолжите путь к цели",
+    buttonText: "Вернуться",
+    buttonUrl: "/",
+  }),
+  churn_14d: () => ({
+    text: "🌟 <b>Не сдавайтесь!</b>\nВаш план ждёт вас",
+    buttonText: "Вернуться",
+    buttonUrl: "/",
+  }),
+  duel_accepted: (data) => ({
+    text: `⚔️ <b>Дуэль началась!</b>\n${data.opponentName} принял ваш вызов`,
+    buttonText: "К дуэли",
+    buttonUrl: `/duels/${data.duelId}`,
+  }),
+  duel_completed: (data) => ({
+    text: "🏆 <b>Дуэль завершена!</b>\nСмотри результаты",
+    buttonText: "Результаты",
+    buttonUrl: `/duels/${data.duelId}`,
+  }),
+  weekly_report: (data) => ({
+    text: `📊 <b>Итоги недели</b>\nУроков: ${data.lessons} | Приёмов пищи: ${data.meals} | Серия: ${data.streak}`,
+    buttonText: "Подробнее",
+    buttonUrl: "/",
+  }),
+};
+
 export const MEDICAL_KEYWORDS = [
   "дозировка",
   "таблетки",

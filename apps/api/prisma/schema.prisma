@@ -44,8 +44,9 @@ model User {
   coachMessages   CoachMessage[]
   streak          Streak?
   gamification    Gamification?
-  challengerDuels Duel[]           @relation("challenger")
-  opponentDuels   Duel[]           @relation("opponent")
+  challengerDuels    Duel[]           @relation("challenger")
+  opponentDuels      Duel[]           @relation("opponent")
+  notificationLogs   NotificationLog[]
 
   @@map("users")
 }
@@ -166,4 +167,20 @@ model Duel {
   @@index([challengerId, status])
   @@index([opponentId, status])
   @@map("duels")
+}
+
+model NotificationLog {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  type      String   // lesson_reminder, streak_risk, churn_2d, etc.
+  channel   String   @default("telegram")
+  status    String   // sent, failed, skipped
+  sentAt    DateTime @default(now()) @map("sent_at")
+  metadata  Json     @default("{}")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, sentAt])
+  @@index([sentAt])
+  @@map("notification_logs")
 }

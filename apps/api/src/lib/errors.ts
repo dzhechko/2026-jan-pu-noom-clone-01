@@ -18,6 +18,8 @@ export type ErrorCode =
   | "DUEL_003"
   | "PAY_001"
   | "PAY_002"
+  | "NOTIF_001"
+  | "NOTIF_002"
   | "GEN_001"
   | "GEN_002";
 
@@ -45,6 +47,8 @@ const ERROR_MESSAGES: Record<ErrorCode, { status: number; message: string }> = {
   DUEL_001: { status: 403, message: "Дуэли доступны в Premium" },
   DUEL_002: { status: 410, message: "Ссылка истекла. Попросите друга отправить новую" },
   DUEL_003: { status: 409, message: "У вас уже есть активная дуэль" },
+  NOTIF_001: { status: 503, message: "Уведомления временно недоступны" },
+  NOTIF_002: { status: 400, message: "Неверный параметр уведомлений" },
   PAY_001: { status: 402, message: "Оплата не прошла. Проверьте данные карты" },
   PAY_002: { status: 502, message: "Сервис оплаты временно недоступен" },
   GEN_001: { status: 500, message: "Что-то пошло не так. Мы уже разбираемся" },
