@@ -37,7 +37,7 @@ export function Toggle({
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
           disabled={disabled}
-          className="sr-only peer"
+          className="sr-only"
         />
         <div
           className={clsx(

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   getLocalHour,
+  getLocalDayOfWeek,
   isQuietHours,
   isLocalHourWindow,
   shouldSendNotification,
@@ -307,14 +308,21 @@ describe("v2 notification date range calculations", () => {
     expect(fifteenDaysAgo.toISOString().slice(0, 10)).toBe("2026-01-31");
   });
 
-  it("weekly_report triggers only on Sunday", () => {
+  it("weekly_report triggers only on local Sunday via getLocalDayOfWeek", () => {
     // Feb 15, 2026 is a Sunday
     const sunday = new Date("2026-02-15T15:00:00Z"); // 18:00 MSK
-    expect(sunday.getDay()).toBe(0);
+    expect(getLocalDayOfWeek(sunday, "Europe/Moscow")).toBe(0);
 
     // Feb 11, 2026 is a Wednesday
     const wednesday = new Date("2026-02-11T15:00:00Z");
-    expect(wednesday.getDay()).not.toBe(0);
+    expect(getLocalDayOfWeek(wednesday, "Europe/Moscow")).not.toBe(0);
+  });
+
+  it("getLocalDayOfWeek handles UTC Saturday that is local Sunday", () => {
+    // Saturday 23:00 UTC = Sunday 02:00 MSK (UTC+3)
+    const satUtcSunMsk = new Date("2026-02-14T23:00:00Z");
+    expect(satUtcSunMsk.getDay()).toBe(6); // UTC Saturday
+    expect(getLocalDayOfWeek(satUtcSunMsk, "Europe/Moscow")).toBe(0); // MSK Sunday
   });
 
   it("weekly_report at 18:00 local matches isLocalHourWindow", () => {
@@ -324,20 +332,19 @@ describe("v2 notification date range calculations", () => {
   });
 });
 
-describe("weekly_report stats data construction", () => {
-  it("builds correct data from user relations", () => {
+describe("weekly_report stats data construction (_count pattern)", () => {
+  it("builds correct data from _count fields", () => {
     const mockUser = {
       id: "user-1",
       telegramId: "123",
       settings: null,
-      lessonProgress: [{ id: "lp-1" }, { id: "lp-2" }, { id: "lp-3" }],
-      mealLogs: [{ id: "ml-1" }, { id: "ml-2" }],
+      _count: { lessonProgress: 3, mealLogs: 2 },
       streak: { currentStreak: 5 },
     };
 
     const data = {
-      lessons: mockUser.lessonProgress.length,
-      meals: mockUser.mealLogs.length,
+      lessons: mockUser._count.lessonProgress,
+      meals: mockUser._count.mealLogs,
       streak: mockUser.streak?.currentStreak ?? 0,
     };
 
@@ -349,14 +356,13 @@ describe("weekly_report stats data construction", () => {
       id: "user-2",
       telegramId: "456",
       settings: null,
-      lessonProgress: [] as { id: string }[],
-      mealLogs: [{ id: "ml-1" }],
+      _count: { lessonProgress: 0, mealLogs: 1 },
       streak: null as { currentStreak: number } | null,
     };
 
     const data = {
-      lessons: mockUser.lessonProgress.length,
-      meals: mockUser.mealLogs.length,
+      lessons: mockUser._count.lessonProgress,
+      meals: mockUser._count.mealLogs,
       streak: mockUser.streak?.currentStreak ?? 0,
     };
 

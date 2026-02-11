@@ -52,26 +52,33 @@ export default function NotificationSettingsPage(): React.JSX.Element {
       .finally(() => setLoading(false));
   }, []);
 
+  function updatePref(key: keyof NotificationPrefs, value: boolean): void {
+    setPrefs((prev) => (prev ? { ...prev, [key]: value } : prev));
+  }
+
   async function handleSave(): Promise<void> {
     if (!prefs) return;
     setSaving(true);
     setSaved(false);
     setError(null);
-
-    const res = await api.patch<PrefsResponse>("/api/notifications/preferences", {
-      ...prefs,
-      timezone,
-    });
-
-    if (res.data) {
-      setPrefs(res.data.preferences);
-      setTimezone(res.data.timezone);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } else {
-      setError(res.error?.message ?? "Не удалось сохранить");
+    try {
+      const res = await api.patch<PrefsResponse>("/api/notifications/preferences", {
+        ...prefs,
+        timezone,
+      });
+      if (res.data) {
+        setPrefs(res.data.preferences);
+        setTimezone(res.data.timezone);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      } else {
+        setError(res.error?.message ?? "Не удалось сохранить");
+      }
+    } catch {
+      setError("Не удалось сохранить");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   if (loading) {
@@ -102,10 +109,6 @@ export default function NotificationSettingsPage(): React.JSX.Element {
   }
 
   if (!prefs) return <></>;
-
-  function updatePref(key: keyof NotificationPrefs, value: boolean): void {
-    setPrefs((prev) => (prev ? { ...prev, [key]: value } : prev));
-  }
 
   return (
     <AppShell title="Уведомления" showBack>

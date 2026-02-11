@@ -20,19 +20,25 @@ if [ -z "$CRON_SECRET" ]; then
   exit 1
 fi
 
+# Validate secret contains only safe characters (no shell metacharacters)
+if [[ ! "$CRON_SECRET" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "ERROR: CRON_SECRET contains unsafe characters. Use only [a-zA-Z0-9_-]"
+  exit 1
+fi
+
 cat > "$CRON_FILE" << EOF
 # Vesna scheduled tasks — managed by setup-cron.sh
 SHELL=/bin/bash
 
 # Notifications cron (hourly at :05)
-5 * * * * root curl -sf -X POST ${API_URL}/api/notifications/cron -H "X-Cron-Secret: ${CRON_SECRET}" -H "Content-Type: application/json" > /dev/null 2>&1
+5 * * * * root curl -sf -X POST ${API_URL}/api/notifications/cron -H "X-Cron-Secret: ${CRON_SECRET}" -H "Content-Type: application/json" >> /var/log/vesna-cron.log 2>&1
 
 # Subscription expiration cron (hourly at :10)
-10 * * * * root curl -sf -X POST ${API_URL}/api/subscription/cron -H "X-Cron-Secret: ${CRON_SECRET}" -H "Content-Type: application/json" > /dev/null 2>&1
+10 * * * * root curl -sf -X POST ${API_URL}/api/subscription/cron -H "X-Cron-Secret: ${CRON_SECRET}" -H "Content-Type: application/json" >> /var/log/vesna-cron.log 2>&1
 
 # Duels cron (every 15 minutes)
-*/15 * * * * root curl -sf -X POST ${API_URL}/api/duels/cron -H "X-Cron-Secret: ${CRON_SECRET}" -H "Content-Type: application/json" > /dev/null 2>&1
+*/15 * * * * root curl -sf -X POST ${API_URL}/api/duels/cron -H "X-Cron-Secret: ${CRON_SECRET}" -H "Content-Type: application/json" >> /var/log/vesna-cron.log 2>&1
 EOF
 
-chmod 644 "$CRON_FILE"
-echo "Cron jobs installed at $CRON_FILE"
+chmod 600 "$CRON_FILE"
+echo "Cron jobs installed at $CRON_FILE (mode 600)"

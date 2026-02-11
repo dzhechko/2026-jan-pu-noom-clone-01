@@ -51,22 +51,42 @@
 | `shouldSend` parameterized | 2 types | 8 types |
 | Pref mapping coverage | 7/8 types | 8/8 types |
 
-## Remaining Items (Deferred)
+---
 
-| # | Issue | Priority | Reason |
-|---|-------|----------|--------|
-| 1 | No unit tests for `sendNotification` (DB-dependent) | MAJOR | Requires DB/Redis mocks; add in integration test phase |
-| 2 | No unit tests for `sendTelegramMessage` | MAJOR | Requires fetch mocking; add with other HTTP client tests |
-| 3 | No integration tests (IT-N01..IT-N05) | MAJOR | Requires running server; add with other API integration tests |
-| 4 | `processScheduledNotifications` untested | MAJOR | Requires DB mocks; add in integration test phase |
-| 5 | No application-level rate limiting on preferences | MINOR | Nginx provides 100/min general; acceptable for MVP |
-| 6 | Missing churn_5d/14d/weekly_report in cron | MINOR | Deferred to v2 per validation report |
-| 7 | NotificationLog retention policy | MINOR | Add cleanup cron in v2 |
+## Enhancement Review (v2: Cron + Settings UI + v2 Types)
 
-## Verification
+### Review Date: 2026-02-11
+### Scope: Cron scheduling + Settings UI + v2 notification types
+### Review type: brutal-honesty-review (5 parallel agents)
+
+### Critical & Major Issues — All Fixed
+
+| # | Issue | Category | Fix |
+|---|-------|----------|-----|
+| E1 | DRY: 70 lines of copy-pasted churn queries (2d, 5d, 14d) | Code Quality | Extracted `fetchChurnUsers(now, daysAgo)` + loop with `churnConfigs` |
+| E2 | Bug: `now.getDay()` used UTC not local timezone for weekly_report | Correctness | Added `getLocalDayOfWeek(date, tz)` with per-user timezone check |
+| E3 | Weekly report loaded full records just to count | Performance | Use Prisma `_count` — pushes COUNT to PostgreSQL |
+| E4 | Cron file permissions 644 (world-readable secret) | Security | `chmod 600`, added `[a-zA-Z0-9_-]+` secret validation |
+| E5 | `handleSave` missing try/catch — button stuck on error | UX | Wrapped in try/catch/finally |
+| E6 | `<a>` instead of `<Link>` — full page reload | Next.js | Replaced with `<Link>` for client-side navigation |
+| E7 | Dead `peer` class in toggle component | Code Quality | Removed unused `peer` class from `<input>` |
+| E8 | `updatePref` declared after early returns | Code Quality | Moved before early returns |
+
+### Deferred (non-blocking)
+
+| Issue | Severity | Reason Deferred |
+|-------|----------|-----------------|
+| No cursor pagination past 1000 users | Major (perf) | Current scale <1000; requires architectural change |
+| Sleep between skipped users wastes cron time | Major (perf) | Requires `sendNotificationDirect` return boolean refactor |
+| `startOfLocalDay` UTC approximation | Minor | Pre-existing, acceptable for MVP |
+| DRY cron.yml with matrix strategy | Minor | Functional, cosmetic improvement |
+| Rate limiting on preferences API | Medium (security) | Low-risk endpoint; tracked for hardening pass |
+| Integration tests for `processScheduledNotifications` | Major (testing) | Requires Prisma/Redis mocking infrastructure |
+
+### Verification
 
 - `npx tsc --noEmit` — 0 errors
-- `npx vitest run` — 244/244 tests pass (13 files)
-- All review critical + major issues resolved in code
+- `npx vitest run` — 288/288 tests pass (15 files)
+- No regressions in existing test suites
 
 ## Status: APPROVED — Review Complete

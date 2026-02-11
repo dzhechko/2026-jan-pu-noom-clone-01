@@ -327,116 +327,92 @@ export async function processScheduledNotifications(): Promise<CronStats> {
     streak: (user as typeof usersForStreak[number]).streak?.currentStreak ?? 0,
   }));
 
-  // --- Churn Prevention 2-day (10:00 local) ---
-  const twoDaysAgo = new Date(now);
-  twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-  const threeDaysAgo = new Date(now);
-  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+  // --- Churn Prevention 2d / 5d / 14d (10:00 local) ---
+  const churnConfigs: Array<[number, NotificationType]> = [
+    [2, "churn_2d"],
+    [5, "churn_5d"],
+    [14, "churn_14d"],
+  ];
 
-  const usersForChurn = await prisma.user.findMany({
-    where: {
-      telegramId: { not: null },
-      OR: [
-        {
-          streak: {
-            lastActiveDate: { lte: twoDaysAgo, gt: threeDaysAgo },
-          },
-        },
-        { streak: null, createdAt: { lte: twoDaysAgo, gt: threeDaysAgo } },
-      ],
-    },
-    select: { id: true, telegramId: true, settings: true },
-    take: CRON_BATCH_SIZE,
-  });
-
-  await processBatch(usersForChurn, 10, "churn_2d", now, stats, () => ({}));
-
-  // --- Churn Prevention 5-day (10:00 local) ---
-  const fiveDaysAgo = new Date(now);
-  fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-  const sixDaysAgo = new Date(now);
-  sixDaysAgo.setDate(sixDaysAgo.getDate() - 6);
-
-  const usersForChurn5d = await prisma.user.findMany({
-    where: {
-      telegramId: { not: null },
-      OR: [
-        {
-          streak: {
-            lastActiveDate: { lte: fiveDaysAgo, gt: sixDaysAgo },
-          },
-        },
-        { streak: null, createdAt: { lte: fiveDaysAgo, gt: sixDaysAgo } },
-      ],
-    },
-    select: { id: true, telegramId: true, settings: true },
-    take: CRON_BATCH_SIZE,
-  });
-
-  await processBatch(usersForChurn5d, 10, "churn_5d", now, stats, () => ({}));
-
-  // --- Churn Prevention 14-day (10:00 local) ---
-  const fourteenDaysAgo = new Date(now);
-  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-  const fifteenDaysAgo = new Date(now);
-  fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
-
-  const usersForChurn14d = await prisma.user.findMany({
-    where: {
-      telegramId: { not: null },
-      OR: [
-        {
-          streak: {
-            lastActiveDate: { lte: fourteenDaysAgo, gt: fifteenDaysAgo },
-          },
-        },
-        { streak: null, createdAt: { lte: fourteenDaysAgo, gt: fifteenDaysAgo } },
-      ],
-    },
-    select: { id: true, telegramId: true, settings: true },
-    take: CRON_BATCH_SIZE,
-  });
-
-  await processBatch(usersForChurn14d, 10, "churn_14d", now, stats, () => ({}));
-
-  // --- Weekly Report (Sunday 18:00 local) ---
-  if (now.getDay() === 0) {
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(now.getDate() - 7);
-
-    const usersForWeekly = await prisma.user.findMany({
-      where: { telegramId: { not: null } },
-      select: {
-        id: true,
-        telegramId: true,
-        settings: true,
-        lessonProgress: {
-          where: { completedAt: { gte: sevenDaysAgo } },
-          select: { id: true },
-        },
-        mealLogs: {
-          where: { loggedAt: { gte: sevenDaysAgo } },
-          select: { id: true },
-        },
-        streak: { select: { currentStreak: true } },
-      },
-      take: CRON_BATCH_SIZE,
-    });
-
-    await processBatch(usersForWeekly, 18, "weekly_report", now, stats, (user) => {
-      const u = user as typeof usersForWeekly[number];
-      return {
-        lessons: u.lessonProgress.length,
-        meals: u.mealLogs.length,
-        streak: u.streak?.currentStreak ?? 0,
-      };
-    });
+  for (const [days, type] of churnConfigs) {
+    const users = await fetchChurnUsers(now, days);
+    await processBatch(users, 10, type, now, stats, () => ({}));
   }
+
+  // --- Weekly Report (Sunday 18:00 local, per-user timezone check) ---
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(now.getDate() - 7);
+
+  const usersForWeekly = await prisma.user.findMany({
+    where: { telegramId: { not: null } },
+    select: {
+      id: true,
+      telegramId: true,
+      settings: true,
+      _count: {
+        select: {
+          lessonProgress: { where: { completedAt: { gte: sevenDaysAgo } } },
+          mealLogs: { where: { loggedAt: { gte: sevenDaysAgo } } },
+        },
+      },
+      streak: { select: { currentStreak: true } },
+    },
+    take: CRON_BATCH_SIZE,
+  });
+
+  // Filter to users whose local day is Sunday (not UTC-based getDay())
+  const sundayUsers = usersForWeekly.filter((u) => {
+    const { timezone } = parseNotificationPrefs(u.settings as Record<string, unknown>);
+    return getLocalDayOfWeek(now, timezone) === 0;
+  });
+
+  await processBatch(sundayUsers, 18, "weekly_report", now, stats, (user) => {
+    const u = user as typeof usersForWeekly[number];
+    return {
+      lessons: u._count.lessonProgress,
+      meals: u._count.mealLogs,
+      streak: u.streak?.currentStreak ?? 0,
+    };
+  });
 
   return stats;
 }
 
 // --- Internal helpers ---
+
+async function fetchChurnUsers(now: Date, daysAgo: number): Promise<CronUser[]> {
+  const since = new Date(now);
+  since.setDate(since.getDate() - daysAgo);
+  const before = new Date(now);
+  before.setDate(before.getDate() - (daysAgo + 1));
+
+  return prisma.user.findMany({
+    where: {
+      telegramId: { not: null },
+      OR: [
+        { streak: { lastActiveDate: { lte: since, gt: before } } },
+        { streak: null, createdAt: { lte: since, gt: before } },
+      ],
+    },
+    select: { id: true, telegramId: true, settings: true },
+    take: CRON_BATCH_SIZE,
+  });
+}
+
+export function getLocalDayOfWeek(date: Date, timezone: string): number {
+  try {
+    const formatted = new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      timeZone: timezone,
+    }).format(date);
+    const map: Record<string, number> = {
+      Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+    };
+    return map[formatted] ?? date.getDay();
+  } catch {
+    return date.getDay();
+  }
+}
 
 function getLocalDateString(date: Date, timezone: string): string {
   return new Intl.DateTimeFormat("en-CA", {

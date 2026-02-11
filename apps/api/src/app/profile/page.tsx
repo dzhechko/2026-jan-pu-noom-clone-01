@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { ProgressBar } from "@/components/ui/progress-bar";
+import Link from "next/link";
 import { GAMIFICATION_LEVELS } from "@vesna/shared";
 
 interface ProfileData {
@@ -194,7 +195,7 @@ export default function ProfilePage(): React.JSX.Element {
 
         {/* Settings */}
         <Card>
-          <a
+          <Link
             href="/profile/notifications"
             className="flex items-center justify-between py-1"
           >
@@ -203,7 +204,7 @@ export default function ProfilePage(): React.JSX.Element {
               <p className="text-xs text-tg-hint">Типы, часовой пояс, тихие часы</p>
             </div>
             <span className="text-tg-hint text-lg">&rsaquo;</span>
-          </a>
+          </Link>
         </Card>
 
         {/* Logout */}
