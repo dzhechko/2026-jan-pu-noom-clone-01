@@ -19,7 +19,12 @@ export const vkLoginSchema = z.object({
   vkAccessToken: z.string().min(1),
 });
 
+export const telegramAuthSchema = z.object({
+  initData: z.string().min(1, "initData обязателен"),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type VkLoginInput = z.infer<typeof vkLoginSchema>;
+export type TelegramAuthInput = z.infer<typeof telegramAuthSchema>;
