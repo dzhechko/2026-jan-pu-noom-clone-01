@@ -26,10 +26,10 @@ export default function LessonDetailPage(): React.JSX.Element {
 
   useEffect(() => {
     api
-      .get<LessonContent>(`/api/lessons/${lessonId}`)
+      .get<{ lesson: LessonContent }>(`/api/lessons/${lessonId}`)
       .then((res) => {
-        if (res.data) {
-          setLesson(res.data);
+        if (res.data?.lesson) {
+          setLesson(res.data.lesson);
         } else {
           setError(res.error?.message ?? "Не удалось загрузить урок");
         }
