@@ -30,11 +30,11 @@ apps/api/src/
 │   │   └── meal-summary-engine.ts      # Daily totals + traffic light — NEW
 │   └── validators/
 │       └── meals.ts              # Zod schemas — NEW (separate from inline in route)
-└── content/
-    └── food-database.json        # Static Russian food DB (~500 items) — NEW
 
 content/
-└── food-database.json            # Symlink or copy at project root level
+└── food-database.json            # Static Russian food DB (~500 items) — NEW
+                                  # Canonical path: <project-root>/content/food-database.json
+                                  # (matches existing content/lessons/ pattern)
 ```
 
 ## Data Flow

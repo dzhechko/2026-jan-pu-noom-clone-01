@@ -107,7 +107,7 @@
 - Limit parameter respected
 - Auth required
 
-### Total: ~84 new tests
+### Total: ~94 new tests
 
 ## Edge Cases
 

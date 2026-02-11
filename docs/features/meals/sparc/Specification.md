@@ -18,9 +18,12 @@ lessons route: inline `{ code: "QUIZ_001", message: "..." }` is acceptable for
 generic validation errors. Just ensure the message is meal-appropriate. Better:
 change to a generic validation pattern using the existing error code.
 
-**Resolution:** The current QUIZ_001 code and message "Проверьте правильность данных"
-is generic enough. Keep it. The code name is misleading but changing error codes is
-a breaking change. Add a comment noting it's used for general validation.
+**Resolution:** Keep QUIZ_001 for generic Zod validation failures (used project-wide).
+Add a comment in the route for clarity. Error code semantics:
+- QUIZ_001 = generic Zod validation failure (body/params) — used across all routes
+- MEAL_001 = photo file too large (> 5MB)
+- MEAL_002 = photo unrecognizable (confidence < 0.3)
+- MEAL_003 = recognition API unavailable
 
 ### BF-3: MealEntry Interface Mismatch (meals/page.tsx)
 **Current interface:**
@@ -144,10 +147,8 @@ Full 50K database is a future enhancement.
 File: `src/lib/validators/meals.ts`
 
 ```typescript
-// Photo upload
-export const mealPhotoSchema = z.object({
-  // Validated at route level (FormData)
-});
+// Photo upload: validated manually at route level (FormData, not JSON)
+// No Zod schema — MIME type + size checked before buffer extraction
 
 // Daily summary query
 export const dailySummarySchema = z.object({

@@ -2,6 +2,31 @@
 
 > Reference: `docs/Pseudocode.md` §4 (Meal Recognition Pipeline)
 
+## 0. Bug Fixes (Pre-Implementation)
+
+```pseudocode
+BF-1: Field Name Corrections (meals/add/page.tsx line 37-43)
+  CHANGE in api.post body:
+    protein  → proteinG
+    fat      → fatG
+    carbs    → carbsG
+    portionGrams → portionG
+
+BF-2: Error Code Comment (api/meals/route.ts line 96)
+  KEEP "QUIZ_001" — it's used project-wide for generic validation errors
+  ADD comment: // QUIZ_001 is the generic validation error code (not meal-specific)
+  NOTE: MEAL_001 = file too large (photo), MEAL_002 = unrecognizable, MEAL_003 = API down
+
+BF-3: Interface Fix (meals/page.tsx lines 12-22)
+  CHANGE MealEntry interface:
+    protein: number      → proteinG: number  (Prisma Decimal comes as number in JSON)
+    fat: number          → fatG: number
+    carbs: number        → carbsG: number
+    portionGrams: number → portionG: number
+    createdAt: string    → loggedAt: string
+  UPDATE all JSX references to use new field names
+```
+
 ## 1. Meal Recognition Engine
 
 File: `src/lib/engines/meal-recognition-engine.ts`
@@ -33,6 +58,9 @@ FUNCTION recognizeMeal(photoBuffer: Buffer, mimeType: string): RecognitionResult
 
   4. Look up nutrition in food database
      nutrition = lookupFood(response.dishName)
+     IF nutrition == null THEN
+       // Fallback: generic moderate-calorie values per 100g
+       nutrition = { caloriesPer100g: 150, proteinPer100g: 10, fatPer100g: 5, carbsPer100g: 20 }
 
   5. Calculate for estimated portion
      portionG = response.estimatedPortion ?? 300
@@ -68,7 +96,8 @@ LET foodDatabase: FoodItem[] = null
 
 FUNCTION loadFoodDatabase(): FoodItem[]
   IF foodDatabase != null THEN RETURN foodDatabase
-  foodDatabase = JSON.parse(readFile("content/food-database.json"))
+  // Canonical path: <project-root>/content/food-database.json
+  foodDatabase = JSON.parse(readFile(join(process.cwd(), "..", "..", "content", "food-database.json")))
   RETURN foodDatabase
 
 FUNCTION searchFood(query: string, limit: number = 10): FoodItem[]
@@ -138,13 +167,17 @@ FUNCTION computeDailySummary(
 ## 4. Photo Upload Flow
 
 ```pseudocode
-FUNCTION handlePhotoUpload(formData: FormData):
-  1. Extract file from FormData
-  2. Validate: type in [image/jpeg, image/png]
-  3. Validate: size <= 5MB
-  4. Upload to MinIO → get photoUrl
-  5. Call recognizeMeal(buffer, mimeType)
-  6. Return recognition result + photoUrl
+FUNCTION handlePhotoUpload(formData: FormData, userId: string):
+  1. file = formData.get("photo")
+  2. IF !file THEN THROW 400 "Файл не найден"
+  3. IF file.type NOT IN ["image/jpeg", "image/png"] THEN THROW MEAL_001
+  4. IF file.size > 5 * 1024 * 1024 THEN THROW MEAL_001
+  5. buffer = Buffer.from(await file.arrayBuffer())
+  6. IF !process.env.FOOD_RECOGNITION_API_KEY THEN THROW MEAL_003
+  7. result = recognizeMeal(buffer, file.type)
+  8. Upload buffer to MinIO → photoUrl (bucket: "meal-photos", key: `${userId}/${uuid}.jpg`)
+     // Upload AFTER recognition so we don't store photos for failed recognitions
+  9. Return { result: { ...result, photoUrl } }
 
 FUNCTION handleMealConfirm(userId, recognitionResult, photoUrl):
   // User tapped "Да" — save as-is
@@ -172,12 +205,13 @@ FUNCTION handleMealCorrect(userId, correctedData, photoUrl):
 ### POST /api/meals/recognize
 ```pseudocode
 1. requireAuth(req)
-2. Parse FormData, extract photo file
-3. Validate file type + size → MEAL_001 if too large
-4. Upload to MinIO
-5. Try recognizeMeal(buffer, mimeType)
-   CATCH MealRecognitionError → MEAL_002 or MEAL_003
-6. Return { result: { ...recognition, photoUrl } }
+2. handlePhotoUpload(formData, userId)
+   — validates type, size, API key
+   — calls recognizeMeal → nutrition
+   — uploads to MinIO after success
+   — CATCH MealRecognitionError → MEAL_001, MEAL_002, or MEAL_003
+3. Fire-and-forget: updateDuelScore(userId, "meal_logged") — skipped here, only on confirm
+4. Return { result: { ...recognition, photoUrl } }
 ```
 
 ### GET /api/meals/daily
