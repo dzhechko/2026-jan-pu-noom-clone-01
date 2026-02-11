@@ -158,6 +158,22 @@ export const NOTIFICATION_TEMPLATES: Record<
   }),
 };
 
+// --- Subscription constants ---
+
+export const TRIAL_DURATION_DAYS = 7;
+export const SUBSCRIPTION_DURATION_DAYS = 30;
+export const SUBSCRIPTION_PRICE_STARS = 250;
+export const SUBSCRIPTION_CURRENCY = "XTR";
+export const SUBSCRIPTION_PRICE_RUB_APPROX = 499;
+export const INVOICE_DEDUP_TTL_SECONDS = 300; // 5 min
+export const TRIAL_EXPIRY_WARNING_HOURS = 24;
+
+export const SUBSCRIPTION_FEATURES_LOST = [
+  { name: "AI-коуч", description: "Персональные CBT-рекомендации" },
+  { name: "Уроки 4-14", description: "11 продвинутых CBT-уроков" },
+  { name: "Дуэли", description: "Соревнования с друзьями" },
+] as const;
+
 export const MEDICAL_KEYWORDS = [
   "дозировка",
   "таблетки",

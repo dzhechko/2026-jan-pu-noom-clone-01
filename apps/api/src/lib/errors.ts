@@ -18,6 +18,10 @@ export type ErrorCode =
   | "DUEL_003"
   | "PAY_001"
   | "PAY_002"
+  | "PAY_003"
+  | "PAY_004"
+  | "PAY_005"
+  | "PAY_006"
   | "NOTIF_001"
   | "NOTIF_002"
   | "GEN_001"
@@ -49,8 +53,12 @@ const ERROR_MESSAGES: Record<ErrorCode, { status: number; message: string }> = {
   DUEL_003: { status: 409, message: "У вас уже есть активная дуэль" },
   NOTIF_001: { status: 503, message: "Уведомления временно недоступны" },
   NOTIF_002: { status: 400, message: "Неверный параметр уведомлений" },
-  PAY_001: { status: 402, message: "Оплата не прошла. Проверьте данные карты" },
+  PAY_001: { status: 400, message: "Для оплаты Stars откройте приложение через Telegram" },
   PAY_002: { status: 502, message: "Сервис оплаты временно недоступен" },
+  PAY_003: { status: 400, message: "Пробный период уже был использован" },
+  PAY_004: { status: 400, message: "У вас уже есть активная подписка" },
+  PAY_005: { status: 400, message: "Нет активной подписки для отмены" },
+  PAY_006: { status: 400, message: "Невозможно отменить пробный период. Он завершится автоматически." },
   GEN_001: { status: 500, message: "Что-то пошло не так. Мы уже разбираемся" },
   GEN_002: { status: 503, message: "Проводим технические работы. Скоро вернёмся" },
 };

@@ -46,7 +46,10 @@ model User {
   gamification    Gamification?
   challengerDuels    Duel[]           @relation("challenger")
   opponentDuels      Duel[]           @relation("opponent")
+  hasUsedTrial           Boolean   @default(false) @map("has_used_trial")
+  subscriptionCancelledAt DateTime? @map("subscription_cancelled_at")
   notificationLogs   NotificationLog[]
+  subscriptionLogs   SubscriptionLog[]
 
   @@map("users")
 }
@@ -184,4 +187,22 @@ model NotificationLog {
   @@index([userId, type, sentAt])
   @@index([sentAt])
   @@map("notification_logs")
+}
+
+model SubscriptionLog {
+  id                       String    @id @default(uuid())
+  userId                   String    @map("user_id")
+  event                    String    // trial_started, payment_success, payment_failed, subscription_cancelled, subscription_expired, subscription_renewed
+  amount                   Int?
+  currency                 String?   @default("XTR")
+  telegramPaymentChargeId  String?   @unique @map("telegram_payment_charge_id")
+  providerPaymentChargeId  String?   @map("provider_payment_charge_id")
+  metadata                 Json      @default("{}")
+  createdAt                DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([event, createdAt])
+  @@map("subscription_logs")
 }

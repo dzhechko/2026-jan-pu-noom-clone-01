@@ -152,6 +152,52 @@ export interface NotificationMessage {
   buttonUrl: string;
 }
 
+// --- Subscriptions ---
+
+export type SubscriptionStatusLabel = "free" | "trial" | "active" | "cancelled" | "expired";
+
+export interface SubscriptionStatus {
+  tier: SubscriptionTier;
+  status: SubscriptionStatusLabel;
+  canStartTrial: boolean;
+  expiresAt: string | null;
+  trialEndsAt: string | null;
+  cancelledAt: string | null;
+  daysRemaining: number;
+  features: {
+    maxLessons: number;
+    hasCoach: boolean;
+    hasDuels: boolean;
+  };
+  lostFeatures?: LostFeature[];
+}
+
+export interface LostFeature {
+  name: string;
+  description: string;
+}
+
+export interface TrialInfo {
+  eligible: boolean;
+  durationDays: number;
+  message: string;
+}
+
+export interface InvoiceData {
+  invoiceUrl: string;
+  amount: number;
+  currency: string;
+  description: string;
+}
+
+export type SubscriptionLogEvent =
+  | "trial_started"
+  | "payment_success"
+  | "payment_failed"
+  | "subscription_cancelled"
+  | "subscription_expired"
+  | "subscription_renewed";
+
 export type MedicalCondition = "diabetes" | "hypertension" | "thyroid";
 
 export type QuizQuestionType = "radio" | "number" | "select" | "multiselect";
