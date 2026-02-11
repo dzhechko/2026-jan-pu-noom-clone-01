@@ -39,23 +39,38 @@ export default function HomePage(): React.JSX.Element {
   useEffect(() => {
     if (authLoading || !user) return;
 
-    setDashLoading(true);
-    api
-      .get<DashboardData>("/api/dashboard")
-      .then((res) => {
+    async function loadDashboard(): Promise<void> {
+      setDashLoading(true);
+      try {
+        // Auto-save pending quiz result if exists
+        const pending = sessionStorage.getItem("vesna_quiz_result");
+        if (pending) {
+          try {
+            const parsed = JSON.parse(pending) as { quizId: string };
+            if (parsed.quizId) {
+              await api.post("/api/quiz/save", { quizId: parsed.quizId });
+              sessionStorage.removeItem("vesna_quiz_result");
+            }
+          } catch {
+            // Ignore — will proceed to dashboard check
+          }
+        }
+
+        const res = await api.get<DashboardData>("/api/dashboard");
         if (res.data) {
           setDashboard(res.data);
           setHasProfile(true);
-        } else if (res.status === 404) {
-          setHasProfile(false);
         } else {
           setHasProfile(false);
         }
-      })
-      .catch(() => {
+      } catch {
         setHasProfile(false);
-      })
-      .finally(() => setDashLoading(false));
+      } finally {
+        setDashLoading(false);
+      }
+    }
+
+    loadDashboard();
   }, [authLoading, user]);
 
   // Redirect to quiz if no medical profile
