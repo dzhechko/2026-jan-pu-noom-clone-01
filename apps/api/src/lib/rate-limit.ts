@@ -15,28 +15,38 @@ export async function checkRateLimit(
   key: string,
   config: RateLimitConfig
 ): Promise<RateLimitResult> {
-  const fullKey = `rate_limit:${key}`;
   const now = Date.now();
   const windowMs = config.windowMinutes * 60 * 1000;
-  const windowStart = now - windowMs;
 
-  const pipeline = redis.pipeline();
-  pipeline.zremrangebyscore(fullKey, 0, windowStart);
-  pipeline.zadd(fullKey, now, String(now));
-  pipeline.zcard(fullKey);
-  pipeline.expire(fullKey, config.windowMinutes * 60);
+  try {
+    const fullKey = `rate_limit:${key}`;
+    const windowStart = now - windowMs;
 
-  const results = await pipeline.exec();
-  const count = (results?.[2]?.[1] as number) ?? 0;
-  const allowed = count <= config.maxRequests;
-  const remaining = Math.max(0, config.maxRequests - count);
-  const resetAt = new Date(now + windowMs);
+    const pipeline = redis.pipeline();
+    pipeline.zremrangebyscore(fullKey, 0, windowStart);
+    pipeline.zadd(fullKey, now, String(now));
+    pipeline.zcard(fullKey);
+    pipeline.expire(fullKey, config.windowMinutes * 60);
 
-  if (!allowed) {
-    await redis.zrem(fullKey, String(now));
+    const results = await pipeline.exec();
+    const count = (results?.[2]?.[1] as number) ?? 0;
+    const allowed = count <= config.maxRequests;
+    const remaining = Math.max(0, config.maxRequests - count);
+    const resetAt = new Date(now + windowMs);
+
+    if (!allowed) {
+      await redis.zrem(fullKey, String(now));
+    }
+
+    return { allowed, remaining, resetAt };
+  } catch (err) {
+    console.error("[rate-limit] Redis unavailable, allowing request:", err);
+    return {
+      allowed: true,
+      remaining: config.maxRequests,
+      resetAt: new Date(now + windowMs),
+    };
   }
-
-  return { allowed, remaining, resetAt };
 }
 
 export function getClientIp(request: Request): string {

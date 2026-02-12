@@ -11,6 +11,7 @@ export interface TelegramContextValue {
   isTelegram: boolean;
   webApp: WebApp | null;
   initData: string | null;
+  ready: boolean;
 }
 
 // Telegram WebApp type (minimal subset we use)
@@ -50,6 +51,7 @@ export const TelegramContext = createContext<TelegramContextValue>({
   isTelegram: false,
   webApp: null,
   initData: null,
+  ready: false,
 });
 
 export function TelegramProvider({ children }: { children: ReactNode }): React.JSX.Element {
@@ -57,6 +59,7 @@ export function TelegramProvider({ children }: { children: ReactNode }): React.J
     isTelegram: false,
     webApp: null,
     initData: null,
+    ready: false,
   });
 
   useEffect(() => {
@@ -82,7 +85,10 @@ export function TelegramProvider({ children }: { children: ReactNode }): React.J
         isTelegram: true,
         webApp,
         initData: webApp.initData,
+        ready: true,
       });
+    } else {
+      setCtx((prev) => ({ ...prev, ready: true }));
     }
   }, []);
 

@@ -43,13 +43,14 @@ export default function HomePage(): React.JSX.Element {
       setDashLoading(true);
       try {
         // Auto-save pending quiz result if exists
-        const pending = sessionStorage.getItem("vesna_quiz_result");
+        let pending: string | null = null;
+        try { pending = sessionStorage.getItem("vesna_quiz_result"); } catch { /* WebView may block storage */ }
         if (pending) {
           try {
             const parsed = JSON.parse(pending) as { quizId: string };
             if (parsed.quizId) {
               await api.post("/api/quiz/save", { quizId: parsed.quizId });
-              sessionStorage.removeItem("vesna_quiz_result");
+              try { sessionStorage.removeItem("vesna_quiz_result"); } catch { /* noop */ }
             }
           } catch {
             // Ignore — will proceed to dashboard check
@@ -83,8 +84,25 @@ export default function HomePage(): React.JSX.Element {
   // Loading state
   if (authLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-tg-bg">
-        <Spinner size="lg" />
+      <div className="flex min-h-screen flex-col items-center justify-center bg-tg-bg px-6">
+        <div className="flex flex-col items-center text-center">
+          <div className="mb-6 flex h-20 w-20 animate-pulse items-center justify-center rounded-full bg-vesna-green/15">
+            <svg
+              className="h-10 w-10 text-vesna-green"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"
+              />
+            </svg>
+          </div>
+          <p className="text-sm text-tg-hint">Загружаем...</p>
+        </div>
       </div>
     );
   }
