@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { apiError } from "@/lib/errors";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { calculateLevel } from "@/lib/engines/gamification-engine";
+import { TOTAL_LESSONS, GAMIFICATION_LEVELS } from "@vesna/shared";
 
 export async function GET(req: Request): Promise<NextResponse> {
   try {
@@ -12,7 +14,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     }
     const { userId } = authResult.user;
 
-    const [gamification, streak] = await Promise.all([
+    const [gamification, streak, lessonsCompleted] = await Promise.all([
       prisma.gamification.findUnique({
         where: { userId },
         select: {
@@ -26,14 +28,40 @@ export async function GET(req: Request): Promise<NextResponse> {
         select: {
           currentStreak: true,
           longestStreak: true,
-          lastActiveDate: true,
+        },
+      }),
+      prisma.lessonProgress.count({
+        where: {
+          userId,
+          status: { in: ["completed", "review_needed"] },
         },
       }),
     ]);
 
+    const xp = gamification?.xpTotal ?? 0;
+    const level = gamification?.level ?? 1;
+    const badges = gamification?.badges ?? [];
+    const { name: levelName } = calculateLevel(xp);
+
+    // Calculate nextLevelXp: find the next level's xpRequired, or null if max level
+    let nextLevelXp: number | null = null;
+    const nextLevelEntry = GAMIFICATION_LEVELS.find((l) => l.level === level + 1);
+    if (nextLevelEntry) {
+      nextLevelXp = nextLevelEntry.xpRequired;
+    }
+
     return NextResponse.json({
-      gamification: gamification ?? { xpTotal: 0, level: 1, badges: [] },
-      streak: streak ?? { currentStreak: 0, longestStreak: 0, lastActiveDate: null },
+      xp,
+      level,
+      levelName,
+      nextLevelXp,
+      badges,
+      streak: {
+        current: streak?.currentStreak ?? 0,
+        longest: streak?.longestStreak ?? 0,
+      },
+      lessonsCompleted,
+      totalLessons: TOTAL_LESSONS,
     });
   } catch (error) {
     console.error("[gamification]", error);
