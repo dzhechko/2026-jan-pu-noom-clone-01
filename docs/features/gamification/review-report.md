@@ -11,9 +11,9 @@
 | Code Quality | 2 | 7 | 0 | 7/9 |
 | Security | 2 | 4 | 0 | 2/6 |
 | Performance | 3 | 5 | 0 | 3/8 |
-| Testing | 2 | 3 | 0 | 0/5 |
+| Testing | 2 | 3 | 0 | 1/5 |
 
-**Fixed in this review cycle: 12 issues**
+**Fixed in this review cycle: 13 issues**
 **Deferred (pre-existing / out of scope): 9 issues**
 
 ---
@@ -72,10 +72,10 @@
 ### D-3: Missing CSP headers (Security — MAJOR)
 **Status:** Pre-existing gap. Belongs in Nginx config or Next.js middleware, not gamification-specific.
 
-### D-4: No meal-to-XP integration tests (Testing — CRITICAL)
-**Status:** Deferred. Unit tests cover the transaction mock path. True integration tests require a running database, which is out of scope for the current test infrastructure.
+### D-4: Missing AX-01/AX-02 Prisma upsert/increment tests (Testing — MAJOR)
+**Status:** Deferred. These spec tests verify DB-level upsert/increment behavior which requires a running database. Route-level mocks cover the logic paths.
 
-### D-5: Missing AX-01/AX-02 accessibility tests (Testing — MAJOR)
+### D-5: Missing accessibility tests (Testing — MAJOR)
 **Status:** Deferred. Accessibility testing requires Playwright + axe-core setup, not yet configured.
 
 ---
@@ -85,12 +85,12 @@
 | File | Tests | Status |
 |------|-------|--------|
 | `gamification/route.test.ts` | 20 | All passing |
-| `meals/route.test.ts` | 6 | All passing (updated mocks) |
+| `meals/route.test.ts` | 40 | All passing (incl. 5 gamification path tests) |
 | `gamification-engine.test.ts` | 18 | All passing |
 | `badge-engine.test.ts` | 10 | All passing |
 | `daily-goal-engine.test.ts` | 6 | All passing |
 | `streak-engine.test.ts` | 9 | All passing |
-| **Total project** | **485** | **All passing** |
+| **Total project** | **490** | **All passing** |
 
 ---
 
@@ -103,6 +103,8 @@
 | `ce31e5b` | fix(meals): update route tests for gamification integration |
 | `4d0c966` | test(gamification): add route tests for GET endpoints |
 | `b934b2c` | fix(gamification): address review findings — transaction, DRY, perf |
+| `8fbe142` | docs(feature): review complete for gamification |
+| `9cbb5fd` | test(meals): add gamification path tests for POST |
 
 ## Conclusion
 
