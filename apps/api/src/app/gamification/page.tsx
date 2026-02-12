@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import { GAMIFICATION_LEVELS, STREAK_MILESTONES } from "@vesna/shared";
+import { GAMIFICATION_LEVELS, STREAK_MILESTONES, BADGE_DEFINITIONS } from "@vesna/shared";
 
 interface GamificationData {
   xp: number;
@@ -22,19 +22,40 @@ interface GamificationData {
   totalLessons: number;
 }
 
+interface LeaderboardEntry {
+  rank: number;
+  displayName: string;
+  xp: number;
+  level: number;
+  levelName: string;
+}
+
+interface LeaderboardData {
+  leaderboard: LeaderboardEntry[];
+  userRank: number;
+  userXp: number;
+}
+
 export default function GamificationPage(): React.JSX.Element {
   const [data, setData] = useState<GamificationData | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api
-      .get<GamificationData>("/api/gamification")
-      .then((res) => {
-        if (res.data) {
-          setData(res.data);
+    Promise.all([
+      api.get<GamificationData>("/api/gamification"),
+      api.get<LeaderboardData>("/api/gamification/leaderboard?limit=20"),
+    ])
+      .then(([gamificationRes, leaderboardRes]) => {
+        if (gamificationRes.data) {
+          setData(gamificationRes.data);
         } else {
-          setError(res.error?.message ?? "Не удалось загрузить достижения");
+          setError(gamificationRes.error?.message ?? "Не удалось загрузить достижения");
+        }
+        // Leaderboard is optional — silently ignore errors
+        if (leaderboardRes.data) {
+          setLeaderboard(leaderboardRes.data);
         }
       })
       .catch(() => {
@@ -191,20 +212,80 @@ export default function GamificationPage(): React.JSX.Element {
           <h3 className="mb-3 text-sm font-semibold text-tg-text">
             Значки
           </h3>
-          {data.badges.length === 0 ? (
-            <p className="text-sm text-tg-hint">
-              Пока нет значков. Продолжайте заниматься!
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {data.badges.map((badge) => (
-                <Badge key={badge} variant="xp">
-                  {badge}
-                </Badge>
+          <div className="grid grid-cols-3 gap-2">
+            {BADGE_DEFINITIONS.map((badge) => {
+              const earned = data.badges.includes(badge.id);
+              return (
+                <div
+                  key={badge.id}
+                  className={`flex flex-col items-center gap-1 rounded-xl p-3 ${
+                    earned ? "bg-vesna-green/10" : "bg-tg-hint/5"
+                  }`}
+                >
+                  <span className={`text-lg ${earned ? "" : "grayscale opacity-40"}`}>
+                    {badge.icon === "fire" ? "🔥" : badge.icon === "book" ? "📚" : badge.icon === "utensils" ? "🍽️" : "🏆"}
+                  </span>
+                  <span className={`text-center text-[10px] font-medium leading-tight ${
+                    earned ? "text-vesna-green-dark" : "text-tg-hint"
+                  }`}>
+                    {badge.name}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-center text-xs text-tg-hint">
+            {data.badges.length} из {BADGE_DEFINITIONS.length} значков получено
+          </p>
+        </Card>
+
+        {/* Leaderboard */}
+        {leaderboard && leaderboard.leaderboard.length > 0 && (
+          <Card>
+            <h3 className="mb-3 text-sm font-semibold text-tg-text">
+              Лидерборд
+            </h3>
+            {/* User's rank */}
+            <div className="mb-3 rounded-xl bg-tg-button/10 px-3 py-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-tg-button">
+                  Ваше место: #{leaderboard.userRank}
+                </span>
+                <span className="text-xs text-tg-hint">
+                  {leaderboard.userXp} XP
+                </span>
+              </div>
+            </div>
+            {/* Top users */}
+            <div className="flex flex-col gap-1.5">
+              {leaderboard.leaderboard.map((entry) => (
+                <div
+                  key={entry.rank}
+                  className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-tg-hint/5"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`w-6 text-center text-sm font-bold ${
+                      entry.rank <= 3 ? "text-vesna-orange" : "text-tg-hint"
+                    }`}>
+                      {entry.rank}
+                    </span>
+                    <span className="text-sm text-tg-text">
+                      {entry.displayName}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-tg-hint">
+                      {entry.levelName}
+                    </span>
+                    <span className="text-sm font-semibold text-tg-text">
+                      {entry.xp}
+                    </span>
+                  </div>
+                </div>
               ))}
             </div>
-          )}
-        </Card>
+          </Card>
+        )}
 
         {/* All levels */}
         <Card>
