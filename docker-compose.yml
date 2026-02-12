@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: development
     ports:
       - "3000:3000"
     environment:
@@ -15,7 +16,8 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - FOOD_RECOGNITION_API_KEY=${FOOD_RECOGNITION_API_KEY}
     volumes:
-      - ./apps/api:/app
+      - ./apps/api:/app/apps/api
+      - ./packages/shared:/app/packages/shared
       - /app/node_modules
     depends_on:
       - postgres
