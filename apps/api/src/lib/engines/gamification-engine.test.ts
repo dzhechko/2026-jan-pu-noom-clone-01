@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calculateLevel } from "./gamification-engine";
+import { calculateLevel, calculateLevelExtended, wouldLevelUp } from "./gamification-engine";
 
 describe("calculateLevel", () => {
   it("returns level 1 (Новичок) for 0 XP", () => {
@@ -42,5 +42,71 @@ describe("calculateLevel", () => {
 
   it("returns level 2 for 399 XP (between level 2 and 3)", () => {
     expect(calculateLevel(399).level).toBe(2);
+  });
+});
+
+describe("calculateLevelExtended", () => {
+  it("returns nextLevelXp=100 at 0 XP", () => {
+    const result = calculateLevelExtended(0);
+    expect(result.level).toBe(1);
+    expect(result.name).toBe("Новичок");
+    expect(result.nextLevelXp).toBe(100);
+  });
+
+  it("returns nextLevelXp=null at 1500+ XP (max level)", () => {
+    const result = calculateLevelExtended(1500);
+    expect(result.level).toBe(5);
+    expect(result.name).toBe("Сенсей");
+    expect(result.nextLevelXp).toBeNull();
+  });
+
+  it("returns correct nextLevelXp at level 2", () => {
+    const result = calculateLevelExtended(100);
+    expect(result.level).toBe(2);
+    expect(result.nextLevelXp).toBe(400);
+  });
+
+  it("returns correct nextLevelXp at level 3", () => {
+    const result = calculateLevelExtended(400);
+    expect(result.level).toBe(3);
+    expect(result.nextLevelXp).toBe(900);
+  });
+
+  it("returns correct nextLevelXp at level 4", () => {
+    const result = calculateLevelExtended(900);
+    expect(result.level).toBe(4);
+    expect(result.nextLevelXp).toBe(1500);
+  });
+});
+
+describe("wouldLevelUp", () => {
+  it("returns true crossing 100 XP threshold", () => {
+    const result = wouldLevelUp(90, 15);
+    expect(result.leveledUp).toBe(true);
+    expect(result.newLevel).toEqual({ level: 2, name: "Ученик" });
+  });
+
+  it("returns false staying within same level", () => {
+    const result = wouldLevelUp(50, 10);
+    expect(result.leveledUp).toBe(false);
+    expect(result.newLevel).toBeNull();
+  });
+
+  it("returns correct newLevel info when leveling up", () => {
+    const result = wouldLevelUp(380, 30);
+    expect(result.leveledUp).toBe(true);
+    expect(result.newLevel).toEqual({ level: 3, name: "Практик" });
+  });
+
+  it("returns false when reaching exact threshold without crossing", () => {
+    const result = wouldLevelUp(100, 0);
+    expect(result.leveledUp).toBe(false);
+    expect(result.newLevel).toBeNull();
+  });
+
+  it("returns true when crossing multiple levels at once", () => {
+    const result = wouldLevelUp(0, 400);
+    expect(result.leveledUp).toBe(true);
+    expect(result.newLevel).toEqual({ level: 3, name: "Практик" });
   });
 });

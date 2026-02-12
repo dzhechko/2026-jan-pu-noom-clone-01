@@ -77,6 +77,19 @@ export const DUEL_XP_REWARDS = {
 export const DUEL_WINNER_BADGE = "Чемпион Дуэли";
 export const MAX_COACH_MESSAGE_LENGTH = 2000;
 
+export const MEAL_XP = 3;
+export const DAILY_GOAL_XP = 15;
+
+export const BADGE_DEFINITIONS = [
+  { id: "streak_7", name: "7 дней подряд", icon: "fire", description: "Серия 7 дней" },
+  { id: "streak_14", name: "2 недели подряд", icon: "fire", description: "Серия 14 дней" },
+  { id: "streak_30", name: "Месяц подряд", icon: "fire", description: "Серия 30 дней" },
+  { id: "streak_60", name: "2 месяца подряд", icon: "fire", description: "Серия 60 дней" },
+  { id: "lessons_all", name: "Все уроки пройдены", icon: "book", description: "14 из 14 уроков" },
+  { id: "meals_100", name: "100 приёмов пищи", icon: "utensils", description: "Записано 100 приёмов" },
+  { id: "duel_champion", name: "Чемпион Дуэли", icon: "trophy", description: "Победа в дуэли" },
+] as const;
+
 // --- Notifications constants ---
 
 function escapeHtml(text: string | number): string {
