@@ -376,6 +376,138 @@ describe("POST /api/meals", () => {
     expect(res.status).toBe(500);
     expect(json.error.code).toBe("GEN_001");
   });
+
+  it("returns leveledUp=true when meal XP pushes past level threshold", async () => {
+    // User at 98 XP, level 1. After MEAL_XP=3 → 101 XP → level 2
+    const txMock = {
+      gamification: {
+        upsert: vi.fn().mockResolvedValue({ xpTotal: 101, level: 1, badges: [] }),
+        findUnique: vi.fn().mockResolvedValue({ badges: [] }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      lessonProgress: { count: vi.fn().mockResolvedValue(0) },
+      mealLog: { count: vi.fn().mockResolvedValue(1) },
+      streak: { findUnique: vi.fn().mockResolvedValue(null) },
+    };
+    ((prisma as unknown as Record<string, unknown>).$transaction as Mock).mockImplementation(
+      async (cb: (tx: typeof txMock) => Promise<void>) => cb(txMock),
+    );
+    (calculateLevel as Mock).mockReturnValue({ level: 2, name: "Ученик" });
+    (checkBadgeConditions as Mock).mockReturnValue([]);
+    (checkDailyGoalEligibility as Mock).mockReturnValue({ eligible: false, bonusXp: 0 });
+
+    const res = await postMeals(makePostRequest(validMealInput()));
+    const json = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(json.leveledUp).toBe(true);
+    expect(json.newLevel).toEqual({ level: 2, name: "Ученик" });
+    // Verify level update was persisted in transaction
+    expect(txMock.gamification.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { level: 2 },
+      }),
+    );
+  });
+
+  it("awards daily goal bonus when lesson + first meal today", async () => {
+    const txMock = {
+      gamification: {
+        upsert: vi.fn().mockResolvedValue({ xpTotal: 53, level: 1, badges: [] }),
+        findUnique: vi.fn().mockResolvedValue({ badges: [] }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      lessonProgress: { count: vi.fn().mockResolvedValue(1) }, // lesson today
+      mealLog: { count: vi.fn().mockResolvedValue(1) }, // first meal today
+      streak: { findUnique: vi.fn().mockResolvedValue(null) },
+    };
+    ((prisma as unknown as Record<string, unknown>).$transaction as Mock).mockImplementation(
+      async (cb: (tx: typeof txMock) => Promise<void>) => cb(txMock),
+    );
+    (calculateLevel as Mock).mockReturnValue({ level: 1, name: "Новичок" });
+    (checkBadgeConditions as Mock).mockReturnValue([]);
+    // Daily goal eligible: hasLesson=true, hasMeal=true, alreadyAwarded=false
+    (checkDailyGoalEligibility as Mock).mockReturnValue({ eligible: true, bonusXp: 15 });
+
+    const res = await postMeals(makePostRequest(validMealInput()));
+    const json = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(json.xpEarned).toBe(18); // MEAL_XP(3) + DAILY_GOAL_XP(15)
+    expect(checkDailyGoalEligibility).toHaveBeenCalledWith(true, true, false);
+  });
+
+  it("returns new badges when badge conditions met", async () => {
+    const txMock = {
+      gamification: {
+        upsert: vi.fn().mockResolvedValue({ xpTotal: 50, level: 1, badges: [] }),
+        findUnique: vi.fn().mockResolvedValue({ badges: [] }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      lessonProgress: { count: vi.fn().mockResolvedValue(0) },
+      mealLog: { count: vi.fn().mockResolvedValue(100) }, // 100 meals triggers badge
+      streak: { findUnique: vi.fn().mockResolvedValue({ longestStreak: 7 }) },
+    };
+    ((prisma as unknown as Record<string, unknown>).$transaction as Mock).mockImplementation(
+      async (cb: (tx: typeof txMock) => Promise<void>) => cb(txMock),
+    );
+    (calculateLevel as Mock).mockReturnValue({ level: 1, name: "Новичок" });
+    (checkDailyGoalEligibility as Mock).mockReturnValue({ eligible: false, bonusXp: 0 });
+    (checkBadgeConditions as Mock).mockReturnValue(["meals_100", "streak_7"]);
+
+    const res = await postMeals(makePostRequest(validMealInput()));
+    const json = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(json.newBadges).toEqual(["meals_100", "streak_7"]);
+    // Verify badges persisted in transaction
+    expect(txMock.gamification.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { badges: ["meals_100", "streak_7"] },
+      }),
+    );
+  });
+
+  it("handles level-up + daily goal + badges simultaneously", async () => {
+    const txMock = {
+      gamification: {
+        upsert: vi.fn().mockResolvedValue({ xpTotal: 103, level: 1, badges: ["streak_7"] }),
+        findUnique: vi.fn().mockResolvedValue({ badges: ["streak_7"] }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      lessonProgress: { count: vi.fn().mockResolvedValue(1) },
+      mealLog: { count: vi.fn().mockResolvedValue(1) },
+      streak: { findUnique: vi.fn().mockResolvedValue({ longestStreak: 30 }) },
+    };
+    ((prisma as unknown as Record<string, unknown>).$transaction as Mock).mockImplementation(
+      async (cb: (tx: typeof txMock) => Promise<void>) => cb(txMock),
+    );
+    // After daily goal: 103 + 15 = 118 XP → level 2
+    (calculateLevel as Mock).mockReturnValue({ level: 2, name: "Ученик" });
+    (checkDailyGoalEligibility as Mock).mockReturnValue({ eligible: true, bonusXp: 15 });
+    (checkBadgeConditions as Mock).mockReturnValue(["streak_30"]);
+
+    const res = await postMeals(makePostRequest(validMealInput()));
+    const json = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(json.xpEarned).toBe(18); // 3 + 15
+    expect(json.leveledUp).toBe(true);
+    expect(json.newLevel).toEqual({ level: 2, name: "Ученик" });
+    expect(json.newBadges).toEqual(["streak_30"]);
+  });
+
+  it("returns 500 when $transaction fails", async () => {
+    ((prisma as unknown as Record<string, unknown>).$transaction as Mock).mockRejectedValue(
+      new Error("Transaction deadlock"),
+    );
+
+    const res = await postMeals(makePostRequest(validMealInput()));
+    const json = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(json.error.code).toBe("GEN_001");
+  });
 });
 
 // ── 3. PATCH /api/meals/[id] ────────────────────────────────────────
