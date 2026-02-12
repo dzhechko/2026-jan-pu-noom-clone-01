@@ -18,12 +18,31 @@ vi.mock("@/lib/prisma", () => ({
       update: vi.fn(),
       delete: vi.fn(),
     },
+    gamification: {
+      upsert: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+    lessonProgress: { count: vi.fn() },
+    streak: { findUnique: vi.fn() },
     medicalProfile: { findUnique: vi.fn() },
   },
 }));
 
 vi.mock("@/lib/engines/duel-engine", () => ({
   updateDuelScore: vi.fn(),
+}));
+
+vi.mock("@/lib/engines/gamification-engine", () => ({
+  calculateLevel: vi.fn(),
+}));
+
+vi.mock("@/lib/engines/badge-engine", () => ({
+  checkBadgeConditions: vi.fn(),
+}));
+
+vi.mock("@/lib/engines/daily-goal-engine", () => ({
+  checkDailyGoalEligibility: vi.fn(),
 }));
 
 vi.mock("@/lib/engines/meal-summary-engine", () => ({
@@ -43,6 +62,9 @@ import { GET as getSearch } from "./search/route";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { updateDuelScore } from "@/lib/engines/duel-engine";
+import { calculateLevel } from "@/lib/engines/gamification-engine";
+import { checkBadgeConditions } from "@/lib/engines/badge-engine";
+import { checkDailyGoalEligibility } from "@/lib/engines/daily-goal-engine";
 import { computeDailySummary } from "@/lib/engines/meal-summary-engine";
 import { searchFood } from "@/lib/engines/food-database";
 
@@ -129,6 +151,18 @@ beforeEach(() => {
 
   // Default findUnique returns null (meal not found)
   (prisma.mealLog.findUnique as Mock).mockResolvedValue(null);
+
+  // Gamification defaults for POST /api/meals
+  (prisma.gamification.upsert as Mock).mockResolvedValue({
+    xpTotal: 3, level: 1, badges: [],
+  });
+  (prisma.gamification.findUnique as Mock).mockResolvedValue(null);
+  (prisma.gamification.update as Mock).mockResolvedValue({});
+  (prisma.lessonProgress.count as Mock).mockResolvedValue(0);
+  (prisma.streak.findUnique as Mock).mockResolvedValue(null);
+  (calculateLevel as Mock).mockReturnValue({ level: 1, name: "Новичок" });
+  (checkBadgeConditions as Mock).mockReturnValue([]);
+  (checkDailyGoalEligibility as Mock).mockReturnValue({ eligible: false, bonusXp: 0 });
 
   // Duel score no-op
   (updateDuelScore as Mock).mockResolvedValue(undefined);
@@ -283,7 +317,7 @@ describe("POST /api/meals", () => {
     expect(json.error.details.fields.calories).toBeDefined();
   });
 
-  it("returns 201 on valid input and returns meal object", async () => {
+  it("returns 201 on valid input with meal and gamification data", async () => {
     const createdMeal = makeMealRecord();
     (prisma.mealLog.create as Mock).mockResolvedValue(createdMeal);
 
@@ -294,6 +328,9 @@ describe("POST /api/meals", () => {
     expect(json.meal).toBeDefined();
     expect(json.meal.id).toBe(MEAL_UUID);
     expect(json.meal.dishName).toBe("Гречка с курицей");
+    expect(json.xpEarned).toBe(3);
+    expect(json.leveledUp).toBe(false);
+    expect(json.newBadges).toEqual([]);
   });
 
   it("sets recognitionMethod to 'manual_entry'", async () => {
