@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { apiError } from "@/lib/errors";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calculateLevel } from "@/lib/engines/gamification-engine";
-import { TOTAL_LESSONS, GAMIFICATION_LEVELS } from "@vesna/shared";
+import { calculateLevelExtended } from "@/lib/engines/gamification-engine";
+import { TOTAL_LESSONS } from "@vesna/shared";
 
 export async function GET(req: Request): Promise<NextResponse> {
   try {
@@ -41,14 +41,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     const xp = gamification?.xpTotal ?? 0;
     const level = gamification?.level ?? 1;
     const badges = gamification?.badges ?? [];
-    const { name: levelName } = calculateLevel(xp);
-
-    // Calculate nextLevelXp: find the next level's xpRequired, or null if max level
-    let nextLevelXp: number | null = null;
-    const nextLevelEntry = GAMIFICATION_LEVELS.find((l) => l.level === level + 1);
-    if (nextLevelEntry) {
-      nextLevelXp = nextLevelEntry.xpRequired;
-    }
+    const { name: levelName, nextLevelXp } = calculateLevelExtended(xp);
 
     return NextResponse.json({
       xp,

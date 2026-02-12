@@ -26,6 +26,7 @@ vi.mock("@/lib/prisma", () => ({
     lessonProgress: { count: vi.fn() },
     streak: { findUnique: vi.fn() },
     medicalProfile: { findUnique: vi.fn() },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -153,11 +154,21 @@ beforeEach(() => {
   (prisma.mealLog.findUnique as Mock).mockResolvedValue(null);
 
   // Gamification defaults for POST /api/meals
-  (prisma.gamification.upsert as Mock).mockResolvedValue({
-    xpTotal: 3, level: 1, badges: [],
-  });
+  // $transaction mock: executes callback with a txMock that mirrors prisma shape
+  const txMock = {
+    gamification: {
+      upsert: vi.fn().mockResolvedValue({ xpTotal: 3, level: 1, badges: [] }),
+      findUnique: vi.fn().mockResolvedValue({ badges: [] }),
+      update: vi.fn().mockResolvedValue({}),
+    },
+    lessonProgress: { count: vi.fn().mockResolvedValue(0) },
+    mealLog: { count: vi.fn().mockResolvedValue(1) },
+    streak: { findUnique: vi.fn().mockResolvedValue(null) },
+  };
+  ((prisma as unknown as Record<string, unknown>).$transaction as Mock).mockImplementation(
+    async (cb: (tx: typeof txMock) => Promise<void>) => cb(txMock),
+  );
   (prisma.gamification.findUnique as Mock).mockResolvedValue(null);
-  (prisma.gamification.update as Mock).mockResolvedValue({});
   (prisma.lessonProgress.count as Mock).mockResolvedValue(0);
   (prisma.streak.findUnique as Mock).mockResolvedValue(null);
   (calculateLevel as Mock).mockReturnValue({ level: 1, name: "Новичок" });

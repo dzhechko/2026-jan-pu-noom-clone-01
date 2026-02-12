@@ -13,6 +13,7 @@ interface GamificationData {
   xp: number;
   level: number;
   levelName: string;
+  nextLevelXp: number | null;
   badges: string[];
   streak: {
     current: number;
@@ -97,11 +98,8 @@ export default function GamificationPage(): React.JSX.Element {
   const currentLevelData = GAMIFICATION_LEVELS.find(
     (l) => l.level === data.level,
   );
-  const nextLevelData = GAMIFICATION_LEVELS.find(
-    (l) => l.level === data.level + 1,
-  );
   const xpForCurrent = currentLevelData?.xpRequired ?? 0;
-  const xpForNext = nextLevelData?.xpRequired ?? data.xp;
+  const xpForNext = data.nextLevelXp ?? data.xp;
   const xpRange = xpForNext - xpForCurrent;
   const xpProgress = xpRange > 0 ? ((data.xp - xpForCurrent) / xpRange) * 100 : 100;
 
@@ -118,13 +116,13 @@ export default function GamificationPage(): React.JSX.Element {
 
           <div className="mt-4 flex items-center justify-between text-xs text-tg-hint">
             <span>{data.xp} XP</span>
-            {nextLevelData && <span>{xpForNext} XP</span>}
+            {data.nextLevelXp !== null && <span>{xpForNext} XP</span>}
           </div>
           <ProgressBar value={xpProgress} className="mt-1" />
 
-          {nextLevelData && (
+          {data.nextLevelXp !== null && (
             <p className="mt-2 text-xs text-tg-hint">
-              До уровня {nextLevelData.name}: {xpForNext - data.xp} XP
+              До следующего уровня: {xpForNext - data.xp} XP
             </p>
           )}
         </Card>

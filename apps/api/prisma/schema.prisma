@@ -149,6 +149,7 @@ model Gamification {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([xpTotal])
   @@map("gamification")
 }
 

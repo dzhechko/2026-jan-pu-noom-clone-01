@@ -88,6 +88,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       return NextResponse.json(body, { status });
     }
 
+    // Create meal outside transaction (independent record)
     const meal = await prisma.mealLog.create({
       data: {
         userId,
@@ -114,101 +115,95 @@ export async function POST(req: Request): Promise<NextResponse> {
       },
     });
 
-    // 1. Award meal XP
+    // Gamification: all XP/level/badge updates in a single transaction
     let totalXpEarned = MEAL_XP;
     let leveledUp = false;
     let newLevel: { level: number; name: string } | null = null;
+    let newBadges: string[] = [];
 
-    const gamification = await prisma.gamification.upsert({
-      where: { userId },
-      update: { xpTotal: { increment: MEAL_XP } },
-      create: { userId, xpTotal: MEAL_XP, level: 1, badges: [] },
-      select: { xpTotal: true, level: true, badges: true },
-    });
-
-    // 2. Check level up
-    const levelInfo = calculateLevel(gamification.xpTotal);
-    if (levelInfo.level !== gamification.level) {
-      await prisma.gamification.update({
+    await prisma.$transaction(async (tx) => {
+      // 1. Award meal XP
+      const gamification = await tx.gamification.upsert({
         where: { userId },
-        data: { level: levelInfo.level },
+        update: { xpTotal: { increment: MEAL_XP } },
+        create: { userId, xpTotal: MEAL_XP, level: 1, badges: [] },
+        select: { xpTotal: true, level: true, badges: true },
       });
-      leveledUp = true;
-      newLevel = levelInfo;
-    }
 
-    // 3. Check daily goal (need to check if user also completed a lesson today)
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setUTCHours(23, 59, 59, 999);
+      let currentXp = gamification.xpTotal;
 
-    const hasLessonToday = await prisma.lessonProgress.count({
-      where: {
-        userId,
-        status: { in: ["completed", "review_needed"] },
-        completedAt: { gte: todayStart, lte: todayEnd },
-      },
-    }) > 0;
+      // 2. Check daily goal
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setUTCHours(23, 59, 59, 999);
 
-    // For daily goal, we just logged a meal so hasMealToday is true
-    // Check if bonus was already awarded today (simple: check if any other meal logged today)
-    const mealsToday = await prisma.mealLog.count({
-      where: { userId, loggedAt: { gte: todayStart, lte: todayEnd } },
-    });
-    // If this is the first meal today AND there's a lesson today, award bonus
-    // (mealsToday includes the just-created meal, so check for exactly 1)
-    const alreadyHadMealToday = mealsToday > 1;
+      const [hasLessonToday, mealsToday] = await Promise.all([
+        tx.lessonProgress.count({
+          where: {
+            userId,
+            status: { in: ["completed", "review_needed"] },
+            completedAt: { gte: todayStart, lte: todayEnd },
+          },
+        }).then((c) => c > 0),
+        tx.mealLog.count({
+          where: { userId, loggedAt: { gte: todayStart, lte: todayEnd } },
+        }),
+      ]);
 
-    const dailyGoal = checkDailyGoalEligibility(hasLessonToday, true, alreadyHadMealToday);
-    if (dailyGoal.eligible) {
-      await prisma.gamification.update({
-        where: { userId },
-        data: { xpTotal: { increment: DAILY_GOAL_XP } },
-      });
-      totalXpEarned += DAILY_GOAL_XP;
-      // Re-check level after daily goal XP
-      const updatedGamification = await prisma.gamification.findUnique({
-        where: { userId },
-        select: { xpTotal: true, level: true },
-      });
-      if (updatedGamification) {
-        const newLevelInfo = calculateLevel(updatedGamification.xpTotal);
-        if (newLevelInfo.level !== updatedGamification.level) {
-          await prisma.gamification.update({
-            where: { userId },
-            data: { level: newLevelInfo.level },
-          });
-          leveledUp = true;
-          newLevel = newLevelInfo;
-        }
+      const dailyGoal = checkDailyGoalEligibility(hasLessonToday, true, mealsToday > 1);
+      if (dailyGoal.eligible) {
+        await tx.gamification.update({
+          where: { userId },
+          data: { xpTotal: { increment: DAILY_GOAL_XP } },
+        });
+        currentXp += DAILY_GOAL_XP;
+        totalXpEarned += DAILY_GOAL_XP;
       }
-    }
 
-    // 4. Check badges
-    const streak = await prisma.streak.findUnique({
-      where: { userId },
-      select: { longestStreak: true },
-    });
-    const totalMeals = await prisma.mealLog.count({ where: { userId } });
-    const lessonsCompleted = await prisma.lessonProgress.count({
-      where: { userId, status: { in: ["completed", "review_needed"] } },
-    });
-    const existingBadges = (gamification.badges as string[]) ?? [];
-    const newBadges = checkBadgeConditions({
-      existingBadges,
-      longestStreak: streak?.longestStreak ?? 0,
-      lessonsCompleted,
-      totalMeals,
-    });
-    if (newBadges.length > 0) {
-      await prisma.gamification.update({
+      // 3. Check level up (single check after all XP awarded)
+      const levelInfo = calculateLevel(currentXp);
+      if (levelInfo.level !== gamification.level) {
+        await tx.gamification.update({
+          where: { userId },
+          data: { level: levelInfo.level },
+        });
+        leveledUp = true;
+        newLevel = levelInfo;
+      }
+
+      // 4. Check badges (fresh read inside transaction to avoid race condition)
+      const [streak, totalMeals, lessonsCompleted] = await Promise.all([
+        tx.streak.findUnique({ where: { userId }, select: { longestStreak: true } }),
+        tx.mealLog.count({ where: { userId } }),
+        tx.lessonProgress.count({
+          where: { userId, status: { in: ["completed", "review_needed"] } },
+        }),
+      ]);
+
+      // Re-read badges inside transaction (avoids stale read from upsert)
+      const freshGamification = await tx.gamification.findUnique({
         where: { userId },
-        data: { badges: [...existingBadges, ...newBadges] },
+        select: { badges: true },
       });
-    }
+      const existingBadges = (freshGamification?.badges as string[]) ?? [];
 
-    // Fire-and-forget duel score update
+      newBadges = checkBadgeConditions({
+        existingBadges,
+        longestStreak: streak?.longestStreak ?? 0,
+        lessonsCompleted,
+        totalMeals,
+      });
+
+      if (newBadges.length > 0) {
+        await tx.gamification.update({
+          where: { userId },
+          data: { badges: [...existingBadges, ...newBadges] },
+        });
+      }
+    });
+
+    // Fire-and-forget duel score update (outside transaction)
     updateDuelScore(userId, "meal_logged").catch((err) =>
       console.error("[duels] meal score", err),
     );

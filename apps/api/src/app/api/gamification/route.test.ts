@@ -22,6 +22,7 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/engines/gamification-engine", () => ({
   calculateLevel: vi.fn(),
+  calculateLevelExtended: vi.fn(),
 }));
 
 // ── Imports (after mocks) ───────────────────────────────────────────
@@ -30,7 +31,7 @@ import { GET as getGamification } from "./route";
 import { GET as getLeaderboard } from "./leaderboard/route";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calculateLevel } from "@/lib/engines/gamification-engine";
+import { calculateLevel, calculateLevelExtended } from "@/lib/engines/gamification-engine";
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -66,8 +67,9 @@ beforeEach(() => {
   // Default lessons completed
   (prisma.lessonProgress.count as Mock).mockResolvedValue(3);
 
-  // Default calculateLevel
+  // Default calculateLevel / calculateLevelExtended
   (calculateLevel as Mock).mockReturnValue({ level: 2, name: "Ученик" });
+  (calculateLevelExtended as Mock).mockReturnValue({ level: 2, name: "Ученик", nextLevelXp: 400 });
 
   // Leaderboard-specific defaults
   (prisma.gamification.findMany as Mock).mockResolvedValue([]);
@@ -111,7 +113,7 @@ describe("GET /api/gamification", () => {
     (prisma.gamification.findUnique as Mock).mockResolvedValue(null);
     (prisma.streak.findUnique as Mock).mockResolvedValue(null);
     (prisma.lessonProgress.count as Mock).mockResolvedValue(0);
-    (calculateLevel as Mock).mockReturnValue({ level: 1, name: "Новичок" });
+    (calculateLevelExtended as Mock).mockReturnValue({ level: 1, name: "Новичок", nextLevelXp: 100 });
 
     const res = await getGamification(makeRequest("/api/gamification"));
     const json = await res.json();
@@ -120,7 +122,7 @@ describe("GET /api/gamification", () => {
     expect(json.xp).toBe(0);
     expect(json.level).toBe(1);
     expect(json.levelName).toBe("Новичок");
-    expect(json.nextLevelXp).toBe(100); // level 2 xpRequired
+    expect(json.nextLevelXp).toBe(100);
     expect(json.badges).toEqual([]);
     expect(json.streak).toEqual({ current: 0, longest: 0 });
     expect(json.lessonsCompleted).toBe(0);
@@ -132,7 +134,7 @@ describe("GET /api/gamification", () => {
       level: 5,
       badges: [],
     });
-    (calculateLevel as Mock).mockReturnValue({ level: 5, name: "Сенсей" });
+    (calculateLevelExtended as Mock).mockReturnValue({ level: 5, name: "Сенсей", nextLevelXp: null });
 
     const res = await getGamification(makeRequest("/api/gamification"));
     const json = await res.json();
@@ -153,10 +155,10 @@ describe("GET /api/gamification", () => {
     });
   });
 
-  it("calls calculateLevel with xpTotal", async () => {
+  it("calls calculateLevelExtended with xpTotal", async () => {
     await getGamification(makeRequest("/api/gamification"));
 
-    expect(calculateLevel).toHaveBeenCalledWith(150);
+    expect(calculateLevelExtended).toHaveBeenCalledWith(150);
   });
 
   it("runs all three queries in parallel", async () => {
